@@ -1,0 +1,2597 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoPost Pro - Múltiplas Contas [OTIMIZADO]</title>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #151932;
+            --bg-card: #1a1f3a;
+            --accent-primary: #ff6b9d;
+            --accent-secondary: #00d9ff;
+            --accent-success: #00ff88;
+            --accent-warning: #ffd93d;
+            --accent-danger: #ff3864;
+            --text-primary: #ffffff;
+            --text-secondary: #a0aec0;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1a0520 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255, 107, 157, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Progress Bar para operações longas */
+        .progress-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            z-index: 10001;
+            min-width: 400px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .progress-modal h3 {
+            margin-bottom: 20px;
+            text-align: center;
+            color: var(--accent-secondary);
+        }
+
+        .progress-bar-container {
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        /* Paginação */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .pagination button.active {
+            background: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        /* Resto dos estilos originais... */
+        .loading-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+            font-weight: 600;
+            z-index: 10000;
+            transform: translateY(-100%);
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 4px 20px rgba(255, 107, 157, 0.3);
+        }
+
+        .loading-banner.active {
+            transform: translateY(0);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            gap: 20px;
+            flex-wrap: wrap;
+            animation: slideDown 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 3em;
+            filter: drop-shadow(0 0 20px var(--accent-primary));
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .header h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -1px;
+        }
+
+        .version-badge {
+            background: linear-gradient(135deg, #00ff88, #00d9ff);
+            color: #0a0e27;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            font-weight: 700;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent-success);
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 10px var(--accent-success);
+        }
+
+        .status-dot.offline {
+            background: var(--accent-danger);
+            box-shadow: 0 0 10px var(--accent-danger);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), #ff3864);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-success), #00d9a6);
+            color: #0a0e27;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.85em;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(255, 107, 157, 0.6);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            background: var(--bg-card);
+            padding: 10px;
+            border-radius: 15px;
+            overflow-x: auto;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.95em;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 107, 157, 0.3);
+        }
+
+        .tab-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.85em;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .tab.active .tab-badge {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.4s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Video Grid */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .video-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 20px;
+            transition: all 0.3s;
+            animation: slideUp 0.4s;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .video-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 8px 30px rgba(255, 107, 157, 0.2);
+        }
+
+        .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .video-title {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+
+        .video-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-pendente {
+            background: rgba(255, 217, 61, 0.2);
+            color: var(--accent-warning);
+        }
+
+        .status-processando {
+            background: rgba(0, 217, 255, 0.2);
+            color: var(--accent-secondary);
+        }
+
+        .status-sucesso {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--accent-success);
+        }
+
+        .status-erro {
+            background: rgba(255, 56, 100, 0.2);
+            color: var(--accent-danger);
+        }
+
+        .video-info {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            line-height: 1.8;
+        }
+
+        .video-info div {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .video-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border);
+        }
+
+        .video-actions button {
+            flex: 1;
+            padding: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s;
+        }
+
+        .video-actions button:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(255, 107, 157, 0.2);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 2px solid var(--border);
+            animation: slideUp 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 25px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.5em;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.5em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+
+        .close-btn:hover {
+            background: var(--bg-secondary);
+            color: var(--accent-danger);
+            transform: rotate(90deg);
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95em;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .date-time-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--accent-primary);
+            background: rgba(255, 107, 157, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .upload-area h3 {
+            font-family: 'Syne', sans-serif;
+            margin-bottom: 5px;
+        }
+
+        .upload-area p {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        /* File List */
+        .file-list {
+            margin: 20px 0;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .file-icon {
+            font-size: 2em;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+
+        .file-size {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+        }
+
+        .file-progress {
+            height: 6px;
+            background: var(--bg-primary);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .file-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            transition: width 0.3s;
+        }
+
+        /* Logs */
+        .logs-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .log-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .log-icon {
+            font-size: 1.5em;
+            margin-top: 2px;
+        }
+
+        .log-content {
+            flex: 1;
+        }
+
+        .log-timestamp {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .log-message {
+            color: var(--text-primary);
+        }
+
+        .log-details {
+            color: var(--accent-danger);
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        /* Alert */
+        .alert {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            z-index: 10000;
+            animation: slideInRight 0.3s;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #00ff88, #00d9a6);
+            color: #0a0e27;
+        }
+
+        .alert-error {
+            background: linear-gradient(135deg, #ff3864, #ff6b9d);
+            color: white;
+        }
+
+        .alert-info {
+            background: linear-gradient(135deg, #00d9ff, #6b9dff);
+            color: white;
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #ffd93d, #ffb93d);
+            color: #0a0e27;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            line-height: 1.8;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .date-time-group {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-banner" id="loadingBanner">
+        <span class="loading-spinner"></span>
+        <span id="loadingText">Processando...</span>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">🚀</div>
+                <div>
+                    <h1>AutoPost Pro <span class="version-badge">OTIMIZADO</span></h1>
+                    <div class="status-indicator">
+                        <div class="status-dot" id="statusDot"></div>
+                        <span id="statusText">Offline</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-outline" onclick="window.location.reload()">
+                    🔄 Reload
+                </button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('tabVideos')">
+                🎬 Vídeos <span class="tab-badge" id="countVideos">0</span>
+            </button>
+            <button class="tab" onclick="switchTab('tabBanco')">
+                📦 Banco <span class="tab-badge" id="countBanco">0</span>
+            </button>
+            <button class="tab" onclick="switchTab('tabContas')">
+                👥 Contas <span class="tab-badge" id="countContas">0</span>
+            </button>
+            <button class="tab" onclick="switchTab('tabDashboard')">
+                📊 Dashboard
+            </button>
+            <button class="tab" onclick="switchTab('tabLogs')">
+                📝 Logs
+            </button>
+        </div>
+
+        <!-- Tab Videos -->
+        <div id="tabVideos" class="tab-content active">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="font-family: 'Syne', sans-serif;">🎬 Vídeos Agendados</h2>
+                <button class="btn btn-primary" onclick="openModal('modalAddVideo')">
+                    ➕ Adicionar Vídeos
+                </button>
+            </div>
+            <div id="emptyVideos" class="empty-state">
+                <div class="empty-icon">🎬</div>
+                <h3>Nenhum vídeo agendado</h3>
+                <p>Comece adicionando seu primeiro vídeo!</p>
+            </div>
+            <div id="videosList" class="video-grid"></div>
+            
+            <!-- Paginação de Vídeos -->
+            <div id="videosPagination" class="pagination" style="display: none;"></div>
+        </div>
+
+        <!-- Tab Banco -->
+        <div id="tabBanco" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="margin: 0; color: var(--accent-secondary); font-family: 'Syne', sans-serif;">📦 Banco de Vídeos</h2>
+                    <p style="margin: 5px 0 0 0; color: var(--text-secondary);">Upload vídeos aqui e agende depois</p>
+                </div>
+                <button class="btn btn-success" onclick="openModal('modalAddToBanco')" style="background: linear-gradient(135deg, var(--accent-success), #00d9a6);">
+                    ➕ Adicionar ao Banco
+                </button>
+            </div>
+            
+            <div id="selectedVideosActions" style="display: none; background: rgba(0, 217, 255, 0.1); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <span style="font-weight: 600; color: var(--accent-secondary);">
+                        <span id="selectedCount">0</span> vídeo(s) selecionado(s)
+                    </span>
+                    <button class="btn btn-primary" onclick="openModal('modalPostar2xDia')" style="background: linear-gradient(135deg, var(--accent-primary), #ff3864);">
+                        🚀 Postar 2x/dia em TODAS as contas
+                    </button>
+                    <button class="btn" onclick="clearSelection()" style="background: var(--bg-secondary);">
+                        ✕ Limpar Seleção
+                    </button>
+                </div>
+            </div>
+
+            <div id="emptyBanco" class="empty-state">
+                <div class="empty-icon">📦</div>
+                <h3>Banco de vídeos vazio</h3>
+                <p>Adicione vídeos aqui para agendar depois!</p>
+            </div>
+            <div id="bancoList" class="video-grid"></div>
+            
+            <!-- Paginação do Banco -->
+            <div id="bancoPagination" class="pagination" style="display: none;"></div>
+        </div>
+
+        <!-- Tab Contas -->
+        <div id="tabContas" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="font-family: 'Syne', sans-serif;">👥 Contas do YouTube</h2>
+                <button class="btn btn-primary" onclick="openModal('modalAddConta')">
+                    ➕ Adicionar Conta
+                </button>
+            </div>
+            <div id="contasList">
+                <div style="text-align: center; color: var(--text-secondary); padding: 60px 20px;">
+                    Nenhuma conta configurada
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Dashboard -->
+        <div id="tabDashboard" class="tab-content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total de Vídeos</div>
+                    <div class="stat-value" id="statTotal">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Contas Ativas</div>
+                    <div class="stat-value" id="statContas">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Taxa de Sucesso</div>
+                    <div class="stat-value" id="statSuccess">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Próximo Vídeo</div>
+                    <div class="stat-value" style="font-size: 1.5em;" id="statNext">-</div>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>ℹ️ Sistema de Múltiplas Contas:</strong><br>
+                • Distribui vídeos automaticamente entre contas ativas<br>
+                • Cada conta tem limite de uploads diário<br>
+                • Sistema balanceia carga entre contas<br>
+                • Worker verifica a cada 1 minuto<br>
+                <br>
+                <strong>✨ Otimizações Aplicadas:</strong><br>
+                • ✅ Banco de vídeos agora é salvo corretamente<br>
+                • ⚡ Performance melhorada com paginação<br>
+                • 🚀 Operações em lote com progress bar<br>
+                • 💾 Debounce automático no salvamento
+            </div>
+        </div>
+
+        <!-- Tab Logs -->
+        <div id="tabLogs" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="font-family: 'Syne', sans-serif;">📝 Logs</h2>
+                <button class="btn btn-small btn-outline" onclick="clearLogs()">
+                    🗑️ Limpar
+                </button>
+            </div>
+            <div id="logsContainer" class="logs-container">
+                <div style="text-align: center; color: var(--text-secondary);">
+                    Nenhum log
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Video -->
+    <div id="modalAddVideo" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Adicionar Vídeos</h2>
+                <button class="close-btn" onclick="closeModal('modalAddVideo')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="formAddVideo" onsubmit="adicionarVideos(event)">
+                    <div class="form-group">
+                        <label>📁 Selecione os vídeos</label>
+                        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                            <div class="upload-icon">🎬</div>
+                            <h3>Arraste vídeos aqui</h3>
+                            <p>ou clique para selecionar</p>
+                        </div>
+                        <input type="file" id="fileInput" multiple accept="video/*" style="display: none;" onchange="handleFileSelect(event)">
+                    </div>
+
+                    <div id="fileList" class="file-list" style="display: none;"></div>
+
+                    <div id="videoDetails" style="display: none;">
+                        <div class="form-group">
+                            <label>📝 Título Base</label>
+                            <input type="text" id="videoTituloBase" placeholder="Ex: Tutorial JavaScript" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>📄 Descrição</label>
+                            <textarea id="videoDescricao" placeholder="Descrição do vídeo..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>🏷️ Tags</label>
+                            <input type="text" id="videoTags" placeholder="javascript, tutorial, programação">
+                        </div>
+
+                        <div class="form-group">
+                            <label>🖼️ Thumbnail (Miniatura)</label>
+                            <div class="upload-area" style="padding: 30px 20px; cursor: pointer;" onclick="document.getElementById('thumbnailInput').click()">
+                                <div class="upload-icon" style="font-size: 2em;">🖼️</div>
+                                <p style="margin: 10px 0 0 0;">Clique para selecionar thumbnail</p>
+                                <p style="font-size: 0.8em; color: var(--text-secondary); margin: 5px 0 0 0;">Recomendado: 1280x720 (16:9) ou 1080x1920 (9:16 para Shorts)</p>
+                            </div>
+                            <input type="file" id="thumbnailInput" accept="image/*" style="display: none;" onchange="handleThumbnailSelect(event)">
+                            <div id="thumbnailPreview" style="display: none; margin-top: 15px;">
+                                <img id="thumbnailImg" style="max-width: 100%; border-radius: 10px; border: 2px solid var(--border);">
+                                <p style="margin-top: 10px; color: var(--accent-success); font-size: 0.9em;">✅ Thumbnail selecionada!</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="background: rgba(255, 107, 157, 0.1); padding: 15px; border-radius: 10px; margin: 20px 0;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="isShort" onchange="handleShortToggle()" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-weight: 600; color: var(--accent-primary);">
+                                    📱 É um Short (vídeo vertical curto)
+                                </span>
+                            </label>
+                            <p style="margin: 10px 0 0 30px; font-size: 0.85em; color: var(--text-secondary);">
+                                Adiciona #Shorts no título e otimiza para formato vertical (até 60 segundos)
+                            </p>
+                        </div>
+
+                        <div class="form-group">
+                            <label>👥 Conta (deixe vazio para auto-distribuir)</label>
+                            <select id="videoConta">
+                                <option value="">🔀 Auto-distribuir entre contas ativas</option>
+                            </select>
+                        </div>
+
+                        <div class="date-time-group">
+                            <div class="form-group">
+                                <label>📅 Data</label>
+                                <input type="date" id="videoData" required>
+                            </div>
+                            <div class="form-group">
+                                <label>🕐 Hora</label>
+                                <input type="time" id="videoHora" value="08:00" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="background: rgba(0, 217, 255, 0.1); padding: 15px; border-radius: 10px; margin: 20px 0;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="postarEmTodas" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-weight: 600; color: var(--accent-secondary);">
+                                    🚀 Postar em TODAS as contas ativas
+                                </span>
+                            </label>
+                            <p style="margin: 10px 0 0 30px; font-size: 0.85em; color: var(--text-secondary);">
+                                Mesmo vídeo será postado em todas as contas com intervalo de 5 minutos
+                            </p>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            ✅ Adicionar Vídeos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Conta -->
+    <div id="modalAddConta" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Nova Conta YouTube</h2>
+                <button class="close-btn" onclick="closeModal('modalAddConta')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="formAddConta" onsubmit="adicionarConta(event)">
+                    <div class="form-group">
+                        <label>📝 Nome da Conta</label>
+                        <input type="text" id="contaNome" placeholder="Ex: Canal Principal" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🔑 Client ID</label>
+                        <input type="text" id="contaClientId" placeholder="seu-client-id.apps.googleusercontent.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🔐 Client Secret</label>
+                        <input type="text" id="contaClientSecret" placeholder="GOCSPX-xxxxxxxxxxxx" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>📊 Limite de Uploads (por dia)</label>
+                        <input type="number" id="contaLimite" value="6" min="1" max="100" required>
+                    </div>
+
+                    <div class="info-box" style="margin: 20px 0;">
+                        <strong>ℹ️ Como obter credenciais:</strong><br>
+                        1. Acesse <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--accent-secondary);">Google Cloud Console</a><br>
+                        2. Crie um projeto e ative YouTube Data API v3<br>
+                        3. Crie credenciais OAuth 2.0<br>
+                        4. Adicione sua URL como origem autorizada
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        ✅ Adicionar e Autorizar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add to Banco -->
+    <div id="modalAddToBanco" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📦 Adicionar ao Banco</h2>
+                <button class="close-btn" onclick="closeModal('modalAddToBanco')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="formAddToBanco" onsubmit="adicionarAoBanco(event)">
+                    <div class="form-group">
+                        <label>📁 Selecione os vídeos</label>
+                        <div class="upload-area" onclick="document.getElementById('fileInputBanco').click()">
+                            <div class="upload-icon">📦</div>
+                            <h3>Arraste vídeos aqui</h3>
+                            <p>ou clique para selecionar</p>
+                        </div>
+                        <input type="file" id="fileInputBanco" multiple accept="video/*" style="display: none;" onchange="handleFileSelectBanco(event)">
+                    </div>
+
+                    <div id="fileListBanco" class="file-list" style="display: none;"></div>
+
+                    <div id="videoDetailsBanco" style="display: none;">
+                        <div class="form-group">
+                            <label>📝 Título Base</label>
+                            <input type="text" id="videoTituloBaseBanco" placeholder="Ex: Tutorial JavaScript" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>📄 Descrição</label>
+                            <textarea id="videoDescricaoBanco" placeholder="Descrição do vídeo..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>🏷️ Tags</label>
+                            <input type="text" id="videoTagsBanco" placeholder="javascript, tutorial, programação">
+                        </div>
+
+                        <div class="form-group">
+                            <label>🖼️ Thumbnail (Miniatura)</label>
+                            <div class="upload-area" style="padding: 30px 20px; cursor: pointer;" onclick="document.getElementById('thumbnailInputBanco').click()">
+                                <div class="upload-icon" style="font-size: 2em;">🖼️</div>
+                                <p style="margin: 10px 0 0 0;">Clique para selecionar thumbnail</p>
+                            </div>
+                            <input type="file" id="thumbnailInputBanco" accept="image/*" style="display: none;" onchange="handleThumbnailSelectBanco(event)">
+                            <div id="thumbnailPreviewBanco" style="display: none; margin-top: 15px;">
+                                <img id="thumbnailImgBanco" style="max-width: 100%; border-radius: 10px; border: 2px solid var(--border);">
+                                <p style="margin-top: 10px; color: var(--accent-success); font-size: 0.9em;">✅ Thumbnail selecionada!</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="background: rgba(255, 107, 157, 0.1); padding: 15px; border-radius: 10px; margin: 20px 0;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="isShortBanco" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-weight: 600; color: var(--accent-primary);">
+                                    📱 É um Short (vídeo vertical curto)
+                                </span>
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-success" style="width: 100%; background: linear-gradient(135deg, var(--accent-success), #00d9a6);">
+                            ✅ Adicionar ao Banco
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Postar 2x/dia -->
+    <div id="modalPostar2xDia" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🚀 Postar 2x/dia em TODAS as contas</h2>
+                <button class="close-btn" onclick="closeModal('modalPostar2xDia')">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="formPostar2xDia" onsubmit="postar2xDiaEmTodas(event)">
+                    <div class="info-box" style="margin-bottom: 20px;">
+                        <strong>⚡ Sistema Otimizado</strong><br>
+                        Os vídeos serão processados em lotes com barra de progresso.<br>
+                        <span id="previewPostar2x"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>📅 Data de Início</label>
+                        <input type="date" id="dataInicio2x" required>
+                    </div>
+
+                    <div class="date-time-group">
+                        <div class="form-group">
+                            <label>🌅 1º Horário</label>
+                            <input type="time" id="horario1" value="08:00" required>
+                        </div>
+                        <div class="form-group">
+                            <label>🌙 2º Horário</label>
+                            <input type="time" id="horario2" value="20:00" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        🚀 Agendar Agora
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== CONFIG ==========
+        const WEBDAV_CONFIG = {
+            url: 'https://seu-webdav.com',
+            username: 'usuario',
+            password: 'senha'
+        };
+
+        const API_UPLOAD_URL = 'https://seu-backend.vercel.app/api/upload-video';
+
+        // ========== STATE ==========
+        let webdav = null;
+        let webdavConnected = false;
+        let allVideos = [];
+        let allLogs = [];
+        let allContas = [];
+        let videosBank = []; // 📦 Banco de Vídeos
+        let selectedFiles = [];
+        let selectedThumbnail = null;
+        let selectedFilesBanco = [];
+        let selectedThumbnailBanco = null;
+        let selectedBancoVideos = new Set();
+        let workerInterval = null;
+        
+        // Paginação
+        let currentPageVideos = 1;
+        let currentPageBanco = 1;
+        const itemsPerPage = 12;
+        
+        // Debounce para saveData
+        let saveDataTimeout = null;
+        const SAVE_DEBOUNCE_MS = 1000;
+
+        // ========== WEBDAV CLIENT ==========
+        class WebDAVClient {
+            constructor(url, username, password) {
+                this.url = url.replace(/\/$/, '');
+                this.auth = 'Basic ' + btoa(username + ':' + password);
+            }
+
+            async testConnection() {
+                try {
+                    const response = await fetch(this.url, {
+                        method: 'PROPFIND',
+                        headers: { 'Authorization': this.auth, 'Depth': '0' }
+                    });
+                    return response.ok;
+                } catch {
+                    return false;
+                }
+            }
+
+            async uploadFile(file, fileName) {
+                const url = `${this.url}/${fileName}`;
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Authorization': this.auth },
+                    body: file
+                });
+                if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+                return url;
+            }
+
+            async loadJSON(fileName) {
+                try {
+                    const url = `${this.url}/${fileName}`;
+                    const response = await fetch(url, {
+                        headers: { 'Authorization': this.auth }
+                    });
+                    if (!response.ok) return null;
+                    return await response.json();
+                } catch {
+                    return null;
+                }
+            }
+
+            async saveJSON(fileName, data) {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                await this.uploadFile(blob, fileName);
+            }
+        }
+
+        // ========== UI HELPERS ==========
+        function showLoading(show, text = 'Processando...') {
+            const banner = document.getElementById('loadingBanner');
+            const loadingText = document.getElementById('loadingText');
+            loadingText.textContent = text;
+            banner.classList.toggle('active', show);
+        }
+
+        function showAlert(type, message) {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            document.body.appendChild(alert);
+            setTimeout(() => alert.remove(), 4000);
+        }
+
+        function updateStatusIndicator(online) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (online) {
+                dot.classList.remove('offline');
+                text.textContent = 'Online';
+            } else {
+                dot.classList.add('offline');
+                text.textContent = 'Offline';
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            
+            // Atualizar preview do modal 2x/dia
+            if (modalId === 'modalPostar2xDia') {
+                const contasAtivas = allContas.filter(c => c.ativa && c.accessToken);
+                const preview = document.getElementById('previewPostar2x');
+                preview.innerHTML = `
+                    <br><strong>📊 Preview:</strong><br>
+                    • ${selectedBancoVideos.size} vídeos selecionados<br>
+                    • ${contasAtivas.length} contas ativas<br>
+                    • Total: ${selectedBancoVideos.size * contasAtivas.length * 2} uploads
+                `;
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // ========== PROGRESS BAR ==========
+        function showProgressModal(title) {
+            const modal = document.createElement('div');
+            modal.id = 'progressModal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 10002;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            modal.innerHTML = `
+                <div class="progress-modal">
+                    <h3>${title}</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%">0%</div>
+                    </div>
+                    <div class="progress-text" id="progressText">Iniciando...</div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            return modal;
+        }
+
+        function updateProgressModal(percent, text) {
+            const bar = document.getElementById('progressBar');
+            const textEl = document.getElementById('progressText');
+            if (bar) {
+                bar.style.width = percent + '%';
+                bar.textContent = Math.round(percent) + '%';
+            }
+            if (textEl) textEl.textContent = text;
+        }
+
+        function closeProgressModal() {
+            const modal = document.getElementById('progressModal');
+            if (modal) modal.remove();
+        }
+
+        // ========== DATA PERSISTENCE ==========
+        async function loadAllData() {
+            try {
+                const videosData = await webdav.loadJSON('videos.json');
+                allVideos = videosData || [];
+                
+                const logsData = await webdav.loadJSON('logs.json');
+                allLogs = logsData || [];
+                
+                const contasData = await webdav.loadJSON('contas.json');
+                allContas = contasData || [];
+                
+                // 🐛 BUG FIX: Agora carrega o banco de vídeos!
+                const bankData = await webdav.loadJSON('banco.json');
+                videosBank = bankData || [];
+                
+                await addLog('success', `Dados carregados: ${allVideos.length} vídeos, ${allContas.length} contas, ${videosBank.length} no banco`);
+            } catch (e) {
+                await addLog('error', 'Erro ao carregar dados', e.message);
+            }
+        }
+
+        // ⚡ PERFORMANCE FIX: Debounce para evitar salvar múltiplas vezes seguidas
+        async function saveData() {
+            if (!webdavConnected) return false;
+            
+            // Cancela o timeout anterior se houver
+            if (saveDataTimeout) {
+                clearTimeout(saveDataTimeout);
+            }
+            
+            // Agenda novo salvamento
+            return new Promise((resolve) => {
+                saveDataTimeout = setTimeout(async () => {
+                    try {
+                        await webdav.saveJSON('videos.json', allVideos);
+                        await webdav.saveJSON('logs.json', allLogs);
+                        await webdav.saveJSON('contas.json', allContas);
+                        
+                        // 🐛 BUG FIX: Agora salva o banco de vídeos!
+                        await webdav.saveJSON('banco.json', videosBank);
+                        
+                        resolve(true);
+                    } catch (e) {
+                        console.error('Erro ao salvar:', e);
+                        resolve(false);
+                    }
+                }, SAVE_DEBOUNCE_MS);
+            });
+        }
+
+        // Força salvamento imediato (sem debounce)
+        async function forceSaveData() {
+            if (saveDataTimeout) {
+                clearTimeout(saveDataTimeout);
+                saveDataTimeout = null;
+            }
+            
+            if (!webdavConnected) return false;
+            
+            try {
+                await webdav.saveJSON('videos.json', allVideos);
+                await webdav.saveJSON('logs.json', allLogs);
+                await webdav.saveJSON('contas.json', allContas);
+                await webdav.saveJSON('banco.json', videosBank);
+                return true;
+            } catch (e) {
+                console.error('Erro ao salvar:', e);
+                return false;
+            }
+        }
+
+        // ========== FILE UPLOAD ==========
+        function setupDragAndDrop() {
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('video/'));
+                handleFiles(files);
+            });
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            if (files.length === 0) {
+                showAlert('error', 'Nenhum vídeo selecionado');
+                return;
+            }
+            selectedFiles = files;
+            const fileList = document.getElementById('fileList');
+            const videoDetails = document.getElementById('videoDetails');
+            fileList.style.display = 'block';
+            videoDetails.style.display = 'block';
+            fileList.innerHTML = files.map((file, index) => {
+                const size = (file.size / (1024 * 1024)).toFixed(2);
+                return `
+                    <div class="file-item">
+                        <div class="file-icon">🎬</div>
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${size} MB</div>
+                            <div class="file-progress">
+                                <div class="file-progress-bar" data-index="${index}" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            showAlert('info', `${files.length} arquivo(s) selecionado(s)`);
+        }
+
+        function handleThumbnailSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                showAlert('error', 'Por favor, selecione uma imagem!');
+                return;
+            }
+            
+            selectedThumbnail = file;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('thumbnailImg').src = e.target.result;
+                document.getElementById('thumbnailPreview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+            
+            showAlert('success', 'Thumbnail selecionada!');
+        }
+
+        function handleShortToggle() {
+            const isShort = document.getElementById('isShort').checked;
+            const tituloInput = document.getElementById('videoTituloBase');
+            
+            if (isShort && !tituloInput.value.includes('#Shorts')) {
+                tituloInput.value += ' #Shorts';
+            } else if (!isShort) {
+                tituloInput.value = tituloInput.value.replace(' #Shorts', '');
+            }
+        }
+
+        // Banco de vídeos - handlers
+        function handleFileSelectBanco(e) {
+            const files = Array.from(e.target.files);
+            handleFilesBanco(files);
+        }
+
+        function handleFilesBanco(files) {
+            if (files.length === 0) {
+                showAlert('error', 'Nenhum vídeo selecionado');
+                return;
+            }
+            selectedFilesBanco = files;
+            const fileList = document.getElementById('fileListBanco');
+            const videoDetails = document.getElementById('videoDetailsBanco');
+            fileList.style.display = 'block';
+            videoDetails.style.display = 'block';
+            fileList.innerHTML = files.map((file, index) => {
+                const size = (file.size / (1024 * 1024)).toFixed(2);
+                return `
+                    <div class="file-item">
+                        <div class="file-icon">📦</div>
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${size} MB</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            showAlert('info', `${files.length} arquivo(s) selecionado(s)`);
+        }
+
+        function handleThumbnailSelectBanco(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                showAlert('error', 'Por favor, selecione uma imagem!');
+                return;
+            }
+            
+            selectedThumbnailBanco = file;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('thumbnailImgBanco').src = e.target.result;
+                document.getElementById('thumbnailPreviewBanco').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+            
+            showAlert('success', 'Thumbnail selecionada!');
+        }
+
+        // ========== ADICIONAR VÍDEOS ==========
+        async function adicionarVideos(event) {
+            event.preventDefault();
+
+            if (selectedFiles.length === 0) {
+                showAlert('error', 'Selecione pelo menos um vídeo!');
+                return;
+            }
+
+            const tituloBase = document.getElementById('videoTituloBase').value.trim();
+            const descricao = document.getElementById('videoDescricao').value.trim();
+            const tags = document.getElementById('videoTags').value.trim();
+            const contaId = document.getElementById('videoConta').value;
+            const data = document.getElementById('videoData').value;
+            const hora = document.getElementById('videoHora').value;
+            const isShort = document.getElementById('isShort').checked;
+            const postarEmTodas = document.getElementById('postarEmTodas').checked;
+
+            showLoading(true, 'Fazendo upload...');
+
+            let thumbnailUrl = null;
+            if (selectedThumbnail) {
+                try {
+                    const thumbFileName = `thumb-${Date.now()}-${selectedThumbnail.name}`;
+                    thumbnailUrl = await webdav.uploadFile(selectedThumbnail, thumbFileName);
+                    await addLog('success', `Thumbnail enviada: ${thumbFileName}`);
+                } catch (error) {
+                    await addLog('error', 'Erro ao enviar thumbnail', error.message);
+                }
+            }
+
+            const contasAtivas = allContas.filter(c => c.ativa && c.accessToken);
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+
+                try {
+                    const progressBar = document.querySelector(`[data-index="${i}"]`);
+                    progressBar.style.width = '50%';
+
+                    const fileName = `${Date.now()}-${file.name}`;
+                    const webdavUrl = await webdav.uploadFile(file, fileName);
+                    progressBar.style.width = '100%';
+
+                    const suffix = selectedFiles.length > 1 ? ` - Parte ${i + 1}` : '';
+                    const titulo = isShort ? `${tituloBase}${suffix} #Shorts`.trim() : `${tituloBase}${suffix}`.trim();
+
+                    if (postarEmTodas && contasAtivas.length > 0) {
+                        for (let j = 0; j < contasAtivas.length; j++) {
+                            const conta = contasAtivas[j];
+                            const intervalo = j * 5;
+                            const dataHora = new Date(`${data}T${hora}`);
+                            dataHora.setMinutes(dataHora.getMinutes() + intervalo);
+
+                            const video = {
+                                id: Date.now() + j + (i * 1000),
+                                titulo: titulo,
+                                descricao: descricao,
+                                tags: tags,
+                                contaIdPreferida: conta.id,
+                                arquivo: file.name,
+                                arquivoWebDAV: fileName,
+                                webdavUrl: webdavUrl,
+                                thumbnailUrl: thumbnailUrl,
+                                isShort: isShort,
+                                tamanho: file.size,
+                                mimeType: file.type,
+                                agendamento: dataHora.toISOString().slice(0, 16),
+                                status: 'pendente',
+                                tentativas: 0,
+                                criadoEm: new Date().toISOString()
+                            };
+
+                            allVideos.push(video);
+                        }
+                        await addLog('success', `${titulo} → ${contasAtivas.length} contas`);
+                    } else {
+                        const video = {
+                            id: Date.now() + i,
+                            titulo: titulo,
+                            descricao: descricao,
+                            tags: tags,
+                            contaIdPreferida: contaId || null,
+                            arquivo: file.name,
+                            arquivoWebDAV: fileName,
+                            webdavUrl: webdavUrl,
+                            thumbnailUrl: thumbnailUrl,
+                            isShort: isShort,
+                            tamanho: file.size,
+                            mimeType: file.type,
+                            agendamento: `${data}T${hora}`,
+                            status: 'pendente',
+                            tentativas: 0,
+                            criadoEm: new Date().toISOString()
+                        };
+
+                        allVideos.push(video);
+                        await addLog('success', `Upload: ${video.titulo} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
+                    }
+                } catch (error) {
+                    await addLog('error', `Erro: ${file.name}`, error.message);
+                }
+            }
+
+            await forceSaveData();
+            showLoading(false);
+            
+            if (postarEmTodas) {
+                showAlert('success', `${selectedFiles.length} vídeo(s) agendado(s) para ${contasAtivas.length} contas! (${selectedFiles.length * contasAtivas.length} total)`);
+            } else {
+                showAlert('success', `${selectedFiles.length} vídeo(s) adicionado(s)!`);
+            }
+
+            selectedFiles = [];
+            selectedThumbnail = null;
+            document.getElementById('formAddVideo').reset();
+            document.getElementById('fileList').style.display = 'none';
+            document.getElementById('videoDetails').style.display = 'none';
+            document.getElementById('thumbnailPreview').style.display = 'none';
+
+            closeModal('modalAddVideo');
+            await renderVideos();
+        }
+
+        // ========== ADICIONAR AO BANCO ==========
+        async function adicionarAoBanco(event) {
+            event.preventDefault();
+
+            if (selectedFilesBanco.length === 0) {
+                showAlert('error', 'Selecione pelo menos um vídeo!');
+                return;
+            }
+
+            const tituloBase = document.getElementById('videoTituloBaseBanco').value.trim();
+            const descricao = document.getElementById('videoDescricaoBanco').value.trim();
+            const tags = document.getElementById('videoTagsBanco').value.trim();
+            const isShort = document.getElementById('isShortBanco').checked;
+
+            showLoading(true, 'Fazendo upload...');
+
+            let thumbnailUrl = null;
+            if (selectedThumbnailBanco) {
+                try {
+                    const thumbFileName = `thumb-${Date.now()}-${selectedThumbnailBanco.name}`;
+                    thumbnailUrl = await webdav.uploadFile(selectedThumbnailBanco, thumbFileName);
+                    await addLog('success', `Thumbnail enviada: ${thumbFileName}`);
+                } catch (error) {
+                    await addLog('error', 'Erro ao enviar thumbnail', error.message);
+                }
+            }
+
+            for (let i = 0; i < selectedFilesBanco.length; i++) {
+                const file = selectedFilesBanco[i];
+
+                try {
+                    const fileName = `${Date.now()}-${file.name}`;
+                    const webdavUrl = await webdav.uploadFile(file, fileName);
+
+                    const suffix = selectedFilesBanco.length > 1 ? ` - Parte ${i + 1}` : '';
+                    const titulo = isShort ? `${tituloBase}${suffix} #Shorts`.trim() : `${tituloBase}${suffix}`.trim();
+
+                    const video = {
+                        id: Date.now() + i,
+                        titulo: titulo,
+                        descricao: descricao,
+                        tags: tags,
+                        arquivo: file.name,
+                        arquivoWebDAV: fileName,
+                        webdavUrl: webdavUrl,
+                        thumbnailUrl: thumbnailUrl,
+                        isShort: isShort,
+                        tamanho: file.size,
+                        mimeType: file.type,
+                        criadoEm: new Date().toISOString()
+                    };
+
+                    videosBank.push(video);
+                    await addLog('success', `📦 Adicionado ao banco: ${video.titulo}`);
+                } catch (error) {
+                    await addLog('error', `Erro: ${file.name}`, error.message);
+                }
+            }
+
+            await forceSaveData();
+            showLoading(false);
+            showAlert('success', `${selectedFilesBanco.length} vídeo(s) adicionado(s) ao banco!`);
+
+            selectedFilesBanco = [];
+            selectedThumbnailBanco = null;
+            document.getElementById('formAddToBanco').reset();
+            document.getElementById('fileListBanco').style.display = 'none';
+            document.getElementById('videoDetailsBanco').style.display = 'none';
+            document.getElementById('thumbnailPreviewBanco').style.display = 'none';
+
+            closeModal('modalAddToBanco');
+            await renderBanco();
+        }
+
+        // ========== BANCO: SELEÇÃO ==========
+        function toggleVideoSelection(videoId) {
+            if (selectedBancoVideos.has(videoId)) {
+                selectedBancoVideos.delete(videoId);
+            } else {
+                selectedBancoVideos.add(videoId);
+            }
+            renderBanco();
+            updateSelectionActions();
+        }
+
+        function clearSelection() {
+            selectedBancoVideos.clear();
+            renderBanco();
+            updateSelectionActions();
+        }
+
+        function updateSelectionActions() {
+            const actionsDiv = document.getElementById('selectedVideosActions');
+            const countSpan = document.getElementById('selectedCount');
+            const count = selectedBancoVideos.size;
+            
+            countSpan.textContent = count;
+            actionsDiv.style.display = count > 0 ? 'block' : 'none';
+        }
+
+        // ⚡ PERFORMANCE FIX: Postar 2x/dia com chunked processing e progress bar
+        async function postar2xDiaEmTodas(e) {
+            e.preventDefault();
+            
+            const dataInicio = document.getElementById('dataInicio2x').value;
+            const horario1 = document.getElementById('horario1').value;
+            const horario2 = document.getElementById('horario2').value;
+            
+            const videosParaPostar = Array.from(selectedBancoVideos).map(id => 
+                videosBank.find(v => v.id === id)
+            ).filter(v => v);
+
+            if (videosParaPostar.length === 0) {
+                showAlert('error', 'Nenhum vídeo selecionado!');
+                return;
+            }
+
+            const contasAtivas = allContas.filter(c => c.ativa && c.accessToken);
+            
+            if (contasAtivas.length === 0) {
+                showAlert('error', 'Nenhuma conta ativa encontrada!');
+                return;
+            }
+
+            closeModal('modalPostar2xDia');
+
+            const totalOps = videosParaPostar.length * 2 * contasAtivas.length;
+            const progressModal = showProgressModal('🚀 Agendando vídeos em lote');
+
+            let completed = 0;
+            let totalAgendamentos = 0;
+
+            // Processa em chunks para não travar a UI
+            const CHUNK_SIZE = 10;
+            const novosVideos = [];
+
+            for (const video of videosParaPostar) {
+                for (let postIndex = 0; postIndex < 2; postIndex++) {
+                    const horario = postIndex === 0 ? horario1 : horario2;
+                    
+                    for (let contaIndex = 0; contaIndex < contasAtivas.length; contaIndex++) {
+                        const conta = contasAtivas[contaIndex];
+                        const intervaloMinutos = contaIndex * 5;
+                        
+                        const dataHora = new Date(`${dataInicio}T${horario}`);
+                        dataHora.setMinutes(dataHora.getMinutes() + intervaloMinutos);
+                        
+                        const novoVideo = {
+                            id: Date.now() + totalAgendamentos + Math.random() * 1000,
+                            titulo: video.titulo,
+                            descricao: video.descricao,
+                            tags: video.tags,
+                            contaIdPreferida: conta.id,
+                            arquivo: video.arquivo,
+                            arquivoWebDAV: video.arquivoWebDAV,
+                            webdavUrl: video.webdavUrl,
+                            thumbnailUrl: video.thumbnailUrl,
+                            isShort: video.isShort,
+                            tamanho: video.tamanho,
+                            mimeType: video.mimeType,
+                            agendamento: dataHora.toISOString().slice(0, 16),
+                            status: 'pendente',
+                            tentativas: 0,
+                            criadoEm: new Date().toISOString()
+                        };
+
+                        novosVideos.push(novoVideo);
+                        totalAgendamentos++;
+                        completed++;
+                        
+                        const percent = (completed / totalOps) * 100;
+                        updateProgressModal(percent, `Processando ${completed}/${totalOps}...`);
+                        
+                        // A cada CHUNK_SIZE operações, dá uma pausa para não travar a UI
+                        if (totalAgendamentos % CHUNK_SIZE === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 10));
+                        }
+                    }
+                }
+                
+                // Remove do banco
+                videosBank = videosBank.filter(v => v.id !== video.id);
+                selectedBancoVideos.delete(video.id);
+            }
+
+            // Adiciona todos os vídeos de uma vez
+            updateProgressModal(90, 'Salvando dados...');
+            allVideos.push(...novosVideos);
+            
+            await forceSaveData();
+            updateProgressModal(100, 'Concluído!');
+            
+            setTimeout(() => {
+                closeProgressModal();
+                showAlert('success', `🎉 ${totalAgendamentos} uploads agendados! (${videosParaPostar.length} vídeos × ${contasAtivas.length} contas × 2 horários)`);
+                renderBanco();
+                renderVideos();
+                updateSelectionActions();
+            }, 500);
+        }
+
+        // ⚡ PERFORMANCE FIX: Renderização com paginação
+        function paginateArray(array, page, perPage) {
+            const start = (page - 1) * perPage;
+            const end = start + perPage;
+            return array.slice(start, end);
+        }
+
+        function renderPagination(containerId, totalItems, currentPage, onPageChange) {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            if (totalPages <= 1) {
+                document.getElementById(containerId).style.display = 'none';
+                return;
+            }
+
+            document.getElementById(containerId).style.display = 'flex';
+            const container = document.getElementById(containerId);
+            
+            let html = `
+                <button ${currentPage === 1 ? 'disabled' : ''} onclick="${onPageChange}(${currentPage - 1})">
+                    ‹ Anterior
+                </button>
+                <span class="pagination-info">Página ${currentPage} de ${totalPages}</span>
+                <button ${currentPage === totalPages ? 'disabled' : ''} onclick="${onPageChange}(${currentPage + 1})">
+                    Próxima ›
+                </button>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        async function renderVideos() {
+            const container = document.getElementById('videosList');
+            const empty = document.getElementById('emptyVideos');
+            const countBadge = document.getElementById('countVideos');
+
+            countBadge.textContent = allVideos.length;
+
+            if (allVideos.length === 0) {
+                empty.style.display = 'block';
+                container.innerHTML = '';
+                document.getElementById('videosPagination').style.display = 'none';
+                return;
+            }
+
+            empty.style.display = 'none';
+            
+            // Paginação
+            const paginatedVideos = paginateArray(allVideos, currentPageVideos, itemsPerPage);
+            
+            container.innerHTML = paginatedVideos.map(video => {
+                const agendamento = new Date(video.agendamento + ':00');
+                const conta = allContas.find(c => c.id === video.contaIdPreferida);
+                const contaNome = conta ? conta.nome : 'Auto';
+                
+                return `
+                    <div class="video-card">
+                        <div class="video-header">
+                            <div>
+                                <div class="video-title">${video.titulo}</div>
+                                ${video.isShort ? '<span style="background: var(--accent-primary); padding: 2px 8px; border-radius: 5px; font-size: 0.8em;">#Shorts</span>' : ''}
+                            </div>
+                            <div class="video-status status-${video.status}">
+                                ${video.status === 'pendente' ? '⏳' : video.status === 'processando' ? '🔄' : video.status === 'sucesso' ? '✅' : '❌'} 
+                                ${video.status}
+                            </div>
+                        </div>
+                        <div class="video-info">
+                            <div>📅 ${agendamento.toLocaleString('pt-BR')}</div>
+                            <div>👤 ${contaNome}</div>
+                            <div>📁 ${video.arquivo}</div>
+                            <div>💾 ${(video.tamanho / (1024 * 1024)).toFixed(2)} MB</div>
+                            ${video.thumbnailUrl ? '<div style="color: var(--accent-success);">🖼️ Com thumbnail</div>' : ''}
+                        </div>
+                        <div class="video-actions">
+                            <button onclick="deleteVideo(${video.id})">🗑️ Excluir</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            renderPagination('videosPagination', allVideos.length, currentPageVideos, 'goToPageVideos');
+        }
+
+        function goToPageVideos(page) {
+            currentPageVideos = page;
+            renderVideos();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function renderBanco() {
+            const container = document.getElementById('bancoList');
+            const empty = document.getElementById('emptyBanco');
+            const countBadge = document.getElementById('countBanco');
+
+            countBadge.textContent = videosBank.length;
+
+            if (videosBank.length === 0) {
+                empty.style.display = 'block';
+                container.innerHTML = '';
+                document.getElementById('bancoPagination').style.display = 'none';
+                return;
+            }
+
+            empty.style.display = 'none';
+            
+            // Paginação
+            const paginatedVideos = paginateArray(videosBank, currentPageBanco, itemsPerPage);
+            
+            container.innerHTML = paginatedVideos.map(video => {
+                const isSelected = selectedBancoVideos.has(video.id);
+                const criadoEm = new Date(video.criadoEm).toLocaleString('pt-BR');
+                
+                return `
+                    <div class="video-card" style="border: 2px solid ${isSelected ? 'var(--accent-success)' : 'var(--border)'}; cursor: pointer;" onclick="toggleVideoSelection(${video.id})">
+                        <div class="video-header">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                ${isSelected ? '<div style="font-size: 1.5em;">✅</div>' : '<div style="font-size: 1.5em;">📦</div>'}
+                                <div style="flex: 1;">
+                                    <div class="video-title">${video.titulo}</div>
+                                    ${video.isShort ? '<span style="background: var(--accent-primary); padding: 2px 8px; border-radius: 5px; font-size: 0.8em;">#Shorts</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="video-info">
+                            <div>📁 ${video.arquivo}</div>
+                            <div>💾 ${(video.tamanho / (1024 * 1024)).toFixed(2)} MB</div>
+                            ${video.thumbnailUrl ? '<div style="color: var(--accent-success);">🖼️ Com thumbnail</div>' : ''}
+                            <div>📅 ${criadoEm}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            renderPagination('bancoPagination', videosBank.length, currentPageBanco, 'goToPageBanco');
+        }
+
+        function goToPageBanco(page) {
+            currentPageBanco = page;
+            renderBanco();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function deleteVideo(videoId) {
+            if (!confirm('Tem certeza que deseja excluir este vídeo?')) return;
+            
+            allVideos = allVideos.filter(v => v.id !== videoId);
+            await saveData();
+            await renderVideos();
+            showAlert('success', 'Vídeo excluído!');
+            await addLog('info', 'Vídeo excluído');
+        }
+
+        // ========== CONTAS ==========
+        function updateContaSelect() {
+            const select = document.getElementById('videoConta');
+            const contasAtivas = allContas.filter(c => c.ativa);
+            
+            let html = '<option value="">🔀 Auto-distribuir entre contas ativas</option>';
+            contasAtivas.forEach(conta => {
+                html += `<option value="${conta.id}">${conta.nome} (${conta.videosPostados}/${conta.limiteUpload} hoje)</option>`;
+            });
+            select.innerHTML = html;
+        }
+
+        async function adicionarConta(event) {
+            event.preventDefault();
+
+            const conta = {
+                id: Date.now(),
+                nome: document.getElementById('contaNome').value,
+                clientId: document.getElementById('contaClientId').value,
+                clientSecret: document.getElementById('contaClientSecret').value,
+                limiteUpload: parseInt(document.getElementById('contaLimite').value),
+                accessToken: null,
+                refreshToken: null,
+                ativa: true,
+                videosPostados: 0,
+                ultimoUpload: null,
+                criadaEm: new Date().toISOString()
+            };
+
+            allContas.push(conta);
+            await saveData();
+            await addLog('success', `Conta adicionada: ${conta.nome}`);
+            
+            closeModal('modalAddConta');
+            await renderContas();
+            showAlert('success', 'Conta adicionada! Agora autorize no YouTube.');
+
+            // Inicia OAuth
+            autorizarConta(conta.id);
+        }
+
+        function autorizarConta(contaId) {
+            const conta = allContas.find(c => c.id === contaId);
+            if (!conta) return;
+
+            const redirectUri = window.location.origin + window.location.pathname;
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${conta.clientId}&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `response_type=code&` +
+                `scope=${encodeURIComponent('https://www.googleapis.com/auth/youtube.upload')}&` +
+                `access_type=offline&` +
+                `prompt=consent&` +
+                `state=${contaId}`;
+
+            showAlert('info', 'Abrindo autorização...');
+            window.open(authUrl, 'YouTubeAuth', 'width=500,height=600');
+
+            window.handleYouTubeCallback = async (code, state) => {
+                showLoading(true, 'Autorizando...');
+                await trocarCodigoPorToken(code, parseInt(state));
+                showLoading(false);
+            };
+        }
+
+        async function trocarCodigoPorToken(code, contaId) {
+            const conta = allContas.find(c => c.id === contaId);
+            if (!conta) return;
+
+            try {
+                const redirectUri = window.location.origin + window.location.pathname;
+                const response = await fetch('https://oauth2.googleapis.com/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        code: code,
+                        client_id: conta.clientId,
+                        client_secret: conta.clientSecret,
+                        redirect_uri: redirectUri,
+                        grant_type: 'authorization_code'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.access_token) {
+                    conta.accessToken = data.access_token;
+                    conta.refreshToken = data.refresh_token;
+                    conta.expiresAt = new Date(Date.now() + (data.expires_in * 1000)).toISOString();
+                    
+                    await forceSaveData();
+                    await renderContas();
+                    updateStatusIndicator(true);
+                    
+                    showAlert('success', `Conta ${conta.nome} autorizada!`);
+                    await addLog('success', `Conta autorizada: ${conta.nome}`);
+                } else {
+                    throw new Error('Falha ao obter token');
+                }
+            } catch (e) {
+                console.error('Erro:', e);
+                showAlert('error', 'Erro ao autorizar: ' + e.message);
+                await addLog('error', 'Erro ao autorizar', e.message);
+            }
+        }
+
+        async function toggleConta(contaId) {
+            const conta = allContas.find(c => c.id === contaId);
+            if (!conta) return;
+            
+            conta.ativa = !conta.ativa;
+            await saveData();
+            await renderContas();
+            
+            showAlert('info', `Conta ${conta.nome} ${conta.ativa ? 'ativada' : 'desativada'}`);
+        }
+
+        async function deleteConta(contaId) {
+            if (!confirm('Tem certeza que deseja excluir esta conta?')) return;
+            
+            allContas = allContas.filter(c => c.id !== contaId);
+            await saveData();
+            await renderContas();
+            showAlert('success', 'Conta excluída!');
+        }
+
+        async function renderContas() {
+            const container = document.getElementById('contasList');
+            const countBadge = document.getElementById('countContas');
+
+            countBadge.textContent = allContas.filter(c => c.ativa).length;
+
+            if (allContas.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 60px 20px;">Nenhuma conta configurada</div>';
+                return;
+            }
+
+            container.innerHTML = allContas.map(conta => {
+                const autorizada = !!conta.accessToken;
+                
+                return `
+                    <div class="video-card" style="border-color: ${conta.ativa ? 'var(--accent-success)' : 'var(--border)'};">
+                        <div class="video-header">
+                            <div>
+                                <div class="video-title">${conta.nome}</div>
+                                ${conta.ativa ? '<span style="background: var(--accent-success); color: #0a0e27; padding: 2px 8px; border-radius: 5px; font-size: 0.8em;">ATIVA</span>' : '<span style="background: var(--text-secondary); padding: 2px 8px; border-radius: 5px; font-size: 0.8em;">INATIVA</span>'}
+                            </div>
+                            ${autorizada ? '<div style="color: var(--accent-success);">✅ Autorizada</div>' : '<div style="color: var(--accent-warning);">⚠️ Não autorizada</div>'}
+                        </div>
+                        <div class="video-info">
+                            <div>📊 ${conta.videosPostados}/${conta.limiteUpload} uploads hoje</div>
+                            <div>📅 Criada em ${new Date(conta.criadaEm).toLocaleDateString('pt-BR')}</div>
+                            ${conta.ultimoUpload ? `<div>🕐 Último: ${new Date(conta.ultimoUpload).toLocaleString('pt-BR')}</div>` : ''}
+                        </div>
+                        <div class="video-actions">
+                            ${!autorizada ? `<button onclick="autorizarConta(${conta.id})">🔑 Autorizar</button>` : ''}
+                            <button onclick="toggleConta(${conta.id})">${conta.ativa ? '⏸️ Pausar' : '▶️ Ativar'}</button>
+                            <button onclick="deleteConta(${conta.id})">🗑️ Excluir</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            updateContaSelect();
+        }
+
+        // ========== DASHBOARD ==========
+        function updateDashboard() {
+            document.getElementById('statTotal').textContent = allVideos.length;
+            document.getElementById('statContas').textContent = allContas.filter(c => c.ativa).length;
+            
+            const sucesso = allVideos.filter(v => v.status === 'sucesso').length;
+            const total = allVideos.filter(v => v.status !== 'pendente').length;
+            const taxaSucesso = total > 0 ? Math.round((sucesso / total) * 100) : 0;
+            document.getElementById('statSuccess').textContent = taxaSucesso + '%';
+            
+            const pendentes = allVideos
+                .filter(v => v.status === 'pendente')
+                .sort((a, b) => new Date(a.agendamento) - new Date(b.agendamento));
+            
+            if (pendentes.length > 0) {
+                const proximo = new Date(pendentes[0].agendamento + ':00');
+                const agora = new Date();
+                const diff = proximo - agora;
+                
+                if (diff > 0) {
+                    const horas = Math.floor(diff / (1000 * 60 * 60));
+                    const minutos = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    document.getElementById('statNext').textContent = `${horas}h ${minutos}m`;
+                } else {
+                    document.getElementById('statNext').textContent = 'Processando...';
+                }
+            } else {
+                document.getElementById('statNext').textContent = '-';
+            }
+        }
+
+        // ========== LOGS ==========
+        async function addLog(type, message, details = null) {
+            const log = {
+                id: Date.now(),
+                type: type,
+                message: message,
+                details: details,
+                timestamp: new Date().toISOString()
+            };
+            
+            allLogs.unshift(log);
+            if (allLogs.length > 100) allLogs.pop();
+            
+            renderLogs();
+            
+            // Salva com debounce
+            await saveData();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('logsContainer');
+            
+            if (allLogs.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary);">Nenhum log</div>';
+                return;
+            }
+
+            container.innerHTML = allLogs.map(log => {
+                const icon = log.type === 'success' ? '✅' : log.type === 'error' ? '❌' : 'ℹ️';
+                const timestamp = new Date(log.timestamp).toLocaleString('pt-BR');
+                
+                return `
+                    <div class="log-item">
+                        <div class="log-icon">${icon}</div>
+                        <div class="log-content">
+                            <div class="log-timestamp">${timestamp}</div>
+                            <div class="log-message">${log.message}</div>
+                            ${log.details ? `<div class="log-details">${log.details}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function clearLogs() {
+            if (!confirm('Limpar todos os logs?')) return;
+            allLogs = [];
+            await forceSaveData();
+            renderLogs();
+        }
+
+        // ========== WORKER ==========
+        async function startWorker() {
+            if (workerInterval) clearInterval(workerInterval);
+            
+            workerInterval = setInterval(async () => {
+                const agora = new Date();
+                const pendentes = allVideos.filter(v => {
+                    if (v.status !== 'pendente') return false;
+                    const agendamento = new Date(v.agendamento + ':00');
+                    return agendamento <= agora;
+                });
+
+                for (const video of pendentes) {
+                    await processarVideo(video);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+
+                updateDashboard();
+            }, 60000);
+        }
+
+        async function processarVideo(video) {
+            video.status = 'processando';
+            await renderVideos();
+
+            try {
+                const conta = allContas.find(c => c.id === video.contaIdPreferida);
+                
+                if (!conta || !conta.ativa || !conta.accessToken) {
+                    const contasDisponiveis = allContas.filter(c => 
+                        c.ativa && 
+                        c.accessToken && 
+                        c.videosPostados < c.limiteUpload
+                    ).sort((a, b) => a.videosPostados - b.videosPostados);
+
+                    if (contasDisponiveis.length === 0) {
+                        throw new Error('Nenhuma conta disponível');
+                    }
+
+                    video.contaIdPreferida = contasDisponiveis[0].id;
+                }
+
+                const contaFinal = allContas.find(c => c.id === video.contaIdPreferida);
+
+                if (contaFinal.videosPostados >= contaFinal.limiteUpload) {
+                    throw new Error(`Limite atingido para ${contaFinal.nome}`);
+                }
+
+                const response = await fetch(API_UPLOAD_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        video: video,
+                        accessToken: contaFinal.accessToken,
+                        webdavUrl: video.webdavUrl,
+                        webdavAuth: `${WEBDAV_CONFIG.username}:${WEBDAV_CONFIG.password}`
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    video.status = 'sucesso';
+                    video.youtubeId = result.youtubeId;
+                    contaFinal.videosPostados++;
+                    contaFinal.ultimoUpload = new Date().toISOString();
+                    
+                    await addLog('success', `✅ ${video.titulo} → ${contaFinal.nome}`, `YouTube ID: ${result.youtubeId}`);
+                    showAlert('success', `Vídeo publicado: ${video.titulo}`);
+                } else {
+                    throw new Error(result.error || 'Falha no upload');
+                }
+            } catch (error) {
+                video.status = 'erro';
+                video.tentativas = (video.tentativas || 0) + 1;
+                await addLog('error', `❌ Erro: ${video.titulo}`, error.message);
+                showAlert('error', `Erro ao processar: ${video.titulo}`);
+            }
+
+            await forceSaveData();
+            await renderVideos();
+            await renderContas();
+        }
+
+        // ========== INIT ==========
+        async function init() {
+            console.log('🚀 AutoPost Pro - Múltiplas Contas [OTIMIZADO]');
+            showLoading(true, 'Conectando...');
+            
+            setupDragAndDrop();
+
+            try {
+                webdav = new WebDAVClient(
+                    WEBDAV_CONFIG.url,
+                    WEBDAV_CONFIG.username,
+                    WEBDAV_CONFIG.password
+                );
+
+                const connected = await webdav.testConnection();
+
+                if (connected) {
+                    webdavConnected = true;
+                    updateStatusIndicator(true);
+                    await loadAllData();
+                    await renderVideos();
+                    await renderContas();
+                    await renderBanco();
+                    renderLogs();
+                    await startWorker();
+                    showAlert('success', 'Sistema online! ✨ Versão otimizada carregada');
+                    await addLog('success', 'Sistema iniciado - Versão otimizada com paginação e performance melhorada');
+                } else {
+                    throw new Error('Falha ao conectar');
+                }
+            } catch (e) {
+                webdavConnected = false;
+                updateStatusIndicator(false);
+                showAlert('error', 'Erro: ' + e.message);
+                await addLog('error', 'Erro na conexão', e.message);
+            }
+
+            showLoading(false);
+            setInterval(updateDashboard, 30000);
+
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.classList.remove('active');
+                    }
+                });
+            });
+
+            // Callback OAuth
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('code') && urlParams.has('state')) {
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+                window.opener?.handleYouTubeCallback?.(code, state);
+                window.close();
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

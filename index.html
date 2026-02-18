@@ -983,6 +983,9 @@
                     <button class="btn btn-primary" onclick="openModal('modalUploadMassa')">
                         ➕ Upload em Massa
                     </button>
+                    <button class="btn" onclick="escanearPastaServidor()" style="background: linear-gradient(135deg, var(--accent-success), #00cc70);">
+                        📁 Escanear Pasta do Servidor
+                    </button>
                     <button class="btn" id="btnSelecionarTodos" onclick="selecionarTodosBiblioteca()" style="background: var(--bg-secondary); display: none;">
                         ☑️ Selecionar Todos
                     </button>
@@ -1497,6 +1500,76 @@
         </div>
     </div>
 
+    <!-- Modal: Escanear Pasta do Servidor -->
+    <div id="modalEscanearPasta" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2>📁 Escanear Pasta do Servidor</h2>
+                <button class="close-btn" onclick="closeModal('modalEscanearPasta')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(0, 217, 255, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--accent-secondary);">
+                    <strong>💡 Como funciona:</strong><br>
+                    1. Você coloca vídeos direto na pasta do servidor (via FTP/SSH/etc)<br>
+                    2. Clica em "Buscar Vídeos"<br>
+                    3. Sistema detecta automaticamente<br>
+                    4. Configura todos de uma vez<br>
+                    5. Adiciona na biblioteca!<br>
+                    <br>
+                    <strong>⚡ MUITO mais rápido que upload pelo navegador!</strong>
+                </div>
+                
+                <button class="btn btn-primary" id="btnBuscarVideos" onclick="buscarVideosNaPasta()" style="width: 100%; margin-bottom: 20px;">
+                    🔍 Buscar Vídeos na Pasta
+                </button>
+                
+                <div id="videosEncontrados" style="display: none;">
+                    <h3 style="color: var(--accent-success); margin-bottom: 15px;">
+                        ✅ <span id="countVideosEncontrados">0</span> vídeo(s) encontrado(s)!
+                    </h3>
+                    
+                    <!-- Configurações Globais -->
+                    <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border);">
+                        <h4 style="margin-bottom: 15px; color: var(--accent-secondary);">⚙️ Configurar TODOS os vídeos:</h4>
+                        <div style="display: grid; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">🏷️ Tags (para todos):</label>
+                                <input type="text" id="tagsGlobalScan" placeholder="Ex: shorts, viral, trending" 
+                                       style="width: 100%; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">📝 Descrição (para todos):</label>
+                                <textarea id="descricaoGlobalScan" placeholder="Ex: Siga para mais conteúdo!" rows="3"
+                                          style="width: 100%; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); resize: vertical;"></textarea>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">➕ Sufixo para títulos (opcional):</label>
+                                <input type="text" id="sufixoTituloScan" placeholder="Ex: #viral ou | Tutorial Completo" 
+                                       style="width: 100%; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border);">
+                                    <input type="checkbox" id="marcarTodosShortScan" style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent-primary);">
+                                    <div>
+                                        <div style="font-weight: 600; color: var(--accent-primary);">📱 Marcar TODOS como Short</div>
+                                        <div style="font-size: 0.85em; color: var(--text-secondary);">Adiciona automaticamente #Shorts no título</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de vídeos encontrados -->
+                    <div id="listaVideosEncontrados" style="max-height: 300px; overflow-y: auto; background: var(--bg-secondary); padding: 15px; border-radius: 10px; margin-bottom: 20px;"></div>
+                    
+                    <button class="btn btn-primary" id="btnAdicionarNaBiblioteca" onclick="adicionarVideosScaneados()" style="width: 100%;">
+                        📚 Adicionar Todos na Biblioteca
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Agendar em Lote -->
     <div id="modalAgendarLote" class="modal">
         <div class="modal-content" style="max-width: 800px;">
@@ -1556,7 +1629,7 @@
     <script>
         // ========== CONFIG ==========
         const WEBDAV_CONFIG = {
-            url: 'https://informational-boulder-organizer-approx.trycloudflare.com/',
+            url: 'https://incl-warning-beats-boutique.trycloudflare.com/',
             username: 'miguel',
             password: '115411'
         };
@@ -3331,6 +3404,175 @@
             
             btn.disabled = false;
             btn.textContent = '✅ Confirmar Agendamento';
+        }
+
+
+        // ========== ESCANEAR PASTA DO SERVIDOR ==========
+        
+        let videosEncontradosNaPasta = [];
+        
+        function escanearPastaServidor() {
+            openModal('modalEscanearPasta');
+            document.getElementById('videosEncontrados').style.display = 'none';
+            videosEncontradosNaPasta = [];
+        }
+        
+        async function buscarVideosNaPasta() {
+            const btn = document.getElementById('btnBuscarVideos');
+            btn.disabled = true;
+            btn.textContent = '🔍 Buscando...';
+            
+            showLoading(true, 'Escaneando pasta do servidor...');
+            
+            try {
+                // Lista arquivos do WebDAV
+                const response = await webdav.request('', 'PROPFIND', null, {
+                    'Depth': '1',
+                    'Content-Type': 'application/xml'
+                });
+                
+                const text = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, 'text/xml');
+                
+                // Extrai nomes dos arquivos
+                const hrefs = xmlDoc.getElementsByTagName('href');
+                const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v'];
+                
+                videosEncontradosNaPasta = [];
+                
+                for (let i = 0; i < hrefs.length; i++) {
+                    const href = hrefs[i].textContent;
+                    const fileName = decodeURIComponent(href.split('/').pop());
+                    
+                    if (fileName && videoExtensions.some(ext => fileName.toLowerCase().endsWith(ext))) {
+                        // Verifica se não está já na biblioteca
+                        const jaExiste = biblioteca.some(v => v.arquivoWebDAV === fileName);
+                        
+                        if (!jaExiste) {
+                            // Tenta obter tamanho
+                            const propstats = xmlDoc.getElementsByTagName('propstat');
+                            let tamanho = 0;
+                            
+                            for (let j = 0; j < propstats.length; j++) {
+                                const propstat = propstats[j];
+                                const thisHref = propstat.parentElement.querySelector('href');
+                                if (thisHref && thisHref.textContent === href) {
+                                    const contentLength = propstat.querySelector('getcontentlength');
+                                    if (contentLength) {
+                                        tamanho = parseInt(contentLength.textContent) || 0;
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            videosEncontradosNaPasta.push({
+                                arquivo: fileName,
+                                arquivoWebDAV: fileName,
+                                webdavUrl: WEBDAV_CONFIG.url + fileName,
+                                tamanho: tamanho || 5242880, // 5MB default se não conseguir detectar
+                                mimeType: 'video/mp4'
+                            });
+                        }
+                    }
+                }
+                
+                if (videosEncontradosNaPasta.length === 0) {
+                    showAlert('info', 'Nenhum vídeo novo encontrado na pasta');
+                    showLoading(false);
+                    btn.disabled = false;
+                    btn.textContent = '🔍 Buscar Vídeos na Pasta';
+                    return;
+                }
+                
+                // Mostra vídeos encontrados
+                document.getElementById('countVideosEncontrados').textContent = videosEncontradosNaPasta.length;
+                document.getElementById('videosEncontrados').style.display = 'block';
+                
+                const lista = document.getElementById('listaVideosEncontrados');
+                lista.innerHTML = videosEncontradosNaPasta.map((v, i) => `
+                    <div style="padding: 12px; background: var(--bg-card); border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border);">
+                        <span style="font-size: 1.8em;">🎬</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; font-size: 0.95em; margin-bottom: 4px;">${v.arquivo}</div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">${(v.tamanho / (1024 * 1024)).toFixed(2)} MB</div>
+                        </div>
+                        <span style="color: var(--accent-success); font-size: 1.2em;">✓</span>
+                    </div>
+                `).join('');
+                
+                showLoading(false);
+                showAlert('success', `${videosEncontradosNaPasta.length} vídeo(s) encontrado(s)!`);
+                
+            } catch (error) {
+                console.error('Erro ao escanear pasta:', error);
+                showAlert('error', 'Erro ao escanear pasta: ' + error.message);
+                showLoading(false);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '🔍 Buscar Vídeos na Pasta';
+        }
+        
+        async function adicionarVideosScaneados() {
+            if (videosEncontradosNaPasta.length === 0) {
+                showAlert('error', 'Nenhum vídeo para adicionar!');
+                return;
+            }
+            
+            const btn = document.getElementById('btnAdicionarNaBiblioteca');
+            btn.disabled = true;
+            btn.textContent = '⏳ Adicionando...';
+            
+            showLoading(true, `Adicionando ${videosEncontradosNaPasta.length} vídeo(s) na biblioteca...`);
+            
+            const tags = document.getElementById('tagsGlobalScan').value || '';
+            const descricao = document.getElementById('descricaoGlobalScan').value || '';
+            const sufixo = document.getElementById('sufixoTituloScan').value || '';
+            const marcarShort = document.getElementById('marcarTodosShortScan').checked;
+            
+            for (let i = 0; i < videosEncontradosNaPasta.length; i++) {
+                const file = videosEncontradosNaPasta[i];
+                
+                let titulo = file.arquivo.replace(/\.[^/.]+$/, ''); // Remove extensão
+                if (sufixo) titulo += ' ' + sufixo;
+                if (marcarShort && !titulo.includes('#Shorts')) titulo += ' #Shorts';
+                
+                const video = {
+                    id: Date.now() + i,
+                    titulo: titulo,
+                    descricao: descricao,
+                    tags: tags,
+                    arquivo: file.arquivo,
+                    arquivoWebDAV: file.arquivoWebDAV,
+                    webdavUrl: file.webdavUrl,
+                    thumbnailUrl: null,
+                    isShort: marcarShort,
+                    tamanho: file.tamanho,
+                    mimeType: file.mimeType,
+                    adicionadoEm: new Date().toISOString()
+                };
+                
+                biblioteca.push(video);
+                await addLog('success', `📁 Detectado e adicionado: ${video.titulo}`);
+            }
+            
+            await saveData();
+            renderBiblioteca();
+            
+            showLoading(false);
+            closeModal('modalEscanearPasta');
+            showAlert('success', `${videosEncontradosNaPasta.length} vídeo(s) adicionado(s) à biblioteca!`);
+            
+            // Limpa
+            videosEncontradosNaPasta = [];
+            document.getElementById('tagsGlobalScan').value = '';
+            document.getElementById('descricaoGlobalScan').value = '';
+            document.getElementById('sufixoTituloScan').value = '';
+            document.getElementById('marcarTodosShortScan').checked = false;
+            
+            btn.disabled = false;
+            btn.textContent = '📚 Adicionar Todos na Biblioteca';
         }
 
         if (document.readyState === 'loading') {

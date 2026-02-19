@@ -1516,7 +1516,13 @@
                     4. Configura todos de uma vez<br>
                     5. Adiciona na biblioteca!<br>
                     <br>
-                    <strong>⚡ MUITO mais rápido que upload pelo navegador!</strong>
+                    <strong>⚡ MUITO mais rápido que upload pelo navegador!</strong><br>
+                    <br>
+                    <strong>⚠️ IMPORTANTE:</strong><br>
+                    • Limite: 2000 vídeos por vez (para não travar)<br>
+                    • Se tem 5000 vídeos: processa 2000, depois escaneie novamente<br>
+                    • Tamanho estimado: ~10MB por vídeo (média para shorts)<br>
+                    • Pode demorar 30-60 segundos com muitos arquivos
                 </div>
                 
                 <button class="btn btn-primary" id="btnBuscarVideos" onclick="buscarVideosNaPasta()" style="width: 100%; margin-bottom: 20px;">
@@ -1629,7 +1635,7 @@
     <script>
         // ========== CONFIG ==========
         const WEBDAV_CONFIG = {
-            url: 'https://perfume-facilitate-eleven-eds.trycloudflare.com',
+            url: 'https://perfume-facilitate-eleven-eds.trycloudflare.com/',
             username: 'miguel',
             password: '115411'
         };
@@ -3422,16 +3428,29 @@
             btn.disabled = true;
             btn.textContent = '🔍 Buscando...';
             
-            showLoading(true, 'Escaneando pasta do servidor...');
+            showLoading(true, 'Escaneando pasta (pode demorar com muitos arquivos)...');
             
             try {
-                // Lista arquivos do WebDAV
+                // Lista arquivos do WebDAV com timeout aumentado
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos
+                
                 const response = await webdav.request('', 'PROPFIND', null, {
                     'Depth': '1',
                     'Content-Type': 'application/xml'
-                });
+                }, controller.signal);
+                
+                clearTimeout(timeoutId);
+                
+                showLoading(true, 'Processando lista de arquivos...');
                 
                 const text = await response.text();
+                
+                // Pausa para não travar o navegador
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                showLoading(true, 'Analisando vídeos encontrados...');
+                
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(text, 'text/xml');
                 
@@ -3440,6 +3459,11 @@
                 const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v'];
                 
                 videosEncontradosNaPasta = [];
+                let processados = 0;
+                const total = hrefs.length;
+                
+                // Processa em lotes para não travar
+                const BATCH_SIZE = 100;
                 
                 for (let i = 0; i < hrefs.length; i++) {
                     const href = hrefs[i].textContent;
@@ -3450,35 +3474,38 @@
                         const jaExiste = biblioteca.some(v => v.arquivoWebDAV === fileName);
                         
                         if (!jaExiste) {
-                            // Tenta obter tamanho
-                            const propstats = xmlDoc.getElementsByTagName('propstat');
-                            let tamanho = 0;
-                            
-                            for (let j = 0; j < propstats.length; j++) {
-                                const propstat = propstats[j];
-                                const thisHref = propstat.parentElement.querySelector('href');
-                                if (thisHref && thisHref.textContent === href) {
-                                    const contentLength = propstat.querySelector('getcontentlength');
-                                    if (contentLength) {
-                                        tamanho = parseInt(contentLength.textContent) || 0;
-                                    }
-                                    break;
-                                }
-                            }
+                            // Usa tamanho estimado para ser mais rápido
+                            // Média de 10MB por vídeo (shorts ~5-15MB)
+                            const tamanhoEstimado = 10 * 1024 * 1024; // 10MB
                             
                             videosEncontradosNaPasta.push({
                                 arquivo: fileName,
                                 arquivoWebDAV: fileName,
                                 webdavUrl: WEBDAV_CONFIG.url + fileName,
-                                tamanho: tamanho || 5242880, // 5MB default se não conseguir detectar
+                                tamanho: tamanhoEstimado,
                                 mimeType: 'video/mp4'
                             });
                         }
                     }
+                    
+                    processados++;
+                    
+                    // Atualiza progresso a cada 100 arquivos
+                    if (processados % BATCH_SIZE === 0) {
+                        showLoading(true, `Processando: ${processados}/${total} arquivos...`);
+                        // Pausa para não travar o navegador
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                    
+                    // LIMITE DE SEGURANÇA: Máximo 2000 vídeos por vez
+                    if (videosEncontradosNaPasta.length >= 2000) {
+                        showAlert('warning', '⚠️ Limite de 2000 vídeos atingido! Adicione estes primeiro, depois escaneie novamente para pegar o resto.');
+                        break;
+                    }
                 }
                 
                 if (videosEncontradosNaPasta.length === 0) {
-                    showAlert('info', 'Nenhum vídeo novo encontrado na pasta');
+                    showAlert('info', 'Nenhum vídeo novo encontrado na pasta (ou todos já estão na biblioteca)');
                     showLoading(false);
                     btn.disabled = false;
                     btn.textContent = '🔍 Buscar Vídeos na Pasta';
@@ -3489,24 +3516,52 @@
                 document.getElementById('countVideosEncontrados').textContent = videosEncontradosNaPasta.length;
                 document.getElementById('videosEncontrados').style.display = 'block';
                 
+                showLoading(true, 'Preparando visualização...');
+                
+                // Mostra apenas os primeiros 50 na lista para não travar
                 const lista = document.getElementById('listaVideosEncontrados');
-                lista.innerHTML = videosEncontradosNaPasta.map((v, i) => `
+                const videosParaMostrar = videosEncontradosNaPasta.slice(0, 50);
+                const resto = videosEncontradosNaPasta.length - 50;
+                
+                lista.innerHTML = videosParaMostrar.map((v, i) => `
                     <div style="padding: 12px; background: var(--bg-card); border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border);">
                         <span style="font-size: 1.8em;">🎬</span>
                         <div style="flex: 1;">
                             <div style="font-weight: 600; font-size: 0.95em; margin-bottom: 4px;">${v.arquivo}</div>
-                            <div style="font-size: 0.85em; color: var(--text-secondary);">${(v.tamanho / (1024 * 1024)).toFixed(2)} MB</div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">~${(v.tamanho / (1024 * 1024)).toFixed(0)} MB</div>
                         </div>
                         <span style="color: var(--accent-success); font-size: 1.2em;">✓</span>
                     </div>
                 `).join('');
                 
+                if (resto > 0) {
+                    lista.innerHTML += `
+                        <div style="padding: 20px; text-align: center; background: rgba(0, 217, 255, 0.1); border-radius: 8px; border: 1px solid var(--accent-secondary);">
+                            <strong style="color: var(--accent-secondary);">+ ${resto} vídeo(s) a mais</strong>
+                            <p style="margin-top: 10px; font-size: 0.9em; color: var(--text-secondary);">
+                                Mostrando apenas os primeiros 50 para não travar o navegador
+                            </p>
+                        </div>
+                    `;
+                }
+                
                 showLoading(false);
-                showAlert('success', `${videosEncontradosNaPasta.length} vídeo(s) encontrado(s)!`);
+                
+                const msg = videosEncontradosNaPasta.length >= 2000 
+                    ? `⚠️ ${videosEncontradosNaPasta.length} vídeo(s) encontrado(s) (limite de 2000 por vez)`
+                    : `✅ ${videosEncontradosNaPasta.length} vídeo(s) encontrado(s)!`;
+                    
+                showAlert('success', msg);
                 
             } catch (error) {
                 console.error('Erro ao escanear pasta:', error);
-                showAlert('error', 'Erro ao escanear pasta: ' + error.message);
+                
+                if (error.name === 'AbortError') {
+                    showAlert('error', 'Timeout! A pasta tem muitos arquivos. Tente dividir em subpastas.');
+                } else {
+                    showAlert('error', 'Erro ao escanear: ' + error.message);
+                }
+                
                 showLoading(false);
             }
             

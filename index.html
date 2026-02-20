@@ -3488,27 +3488,37 @@
                 
                 videosEncontradosNaPasta = [];
                 let processados = 0;
+                let filtradosDuplicados = 0;
                 const total = hrefs.length;
                 
                 // Processa em lotes para não travar
                 const BATCH_SIZE = 100;
+                
+                // Monta Set com apenas os nomes de arquivo da biblioteca (sem path)
+                // para comparação robusta independente de como foi salvo
+                const bibliotecaArquivos = new Set(
+                    biblioteca.map(v => {
+                        // Pega só o nome do arquivo, sem path e sem timestamp prefix (ex: "1234_video.mp4" -> "video.mp4")
+                        const partes = (v.arquivoWebDAV || v.arquivo || '').split('/');
+                        return partes[partes.length - 1]; // último segmento = nome do arquivo
+                    })
+                );
+                
+                console.log('[SCAN] Total hrefs no XML:', total);
+                console.log('[SCAN] Arquivos já na biblioteca:', bibliotecaArquivos.size);
                 
                 for (let i = 0; i < hrefs.length; i++) {
                     const href = hrefs[i].textContent;
                     const fileName = decodeURIComponent(href.split('/').pop());
                     
                     if (fileName && videoExtensions.some(ext => fileName.toLowerCase().endsWith(ext))) {
-                        // Monta caminho completo ANTES de verificar duplicados
-                        const caminhoCompleto = subpasta ? subpasta + fileName : fileName;
+                        const caminhoCompleto = subpasta + fileName;
                         
-                        // Verifica se não está já na biblioteca (compara caminho completo!)
-                        const jaExiste = biblioteca.some(v => v.arquivoWebDAV === caminhoCompleto);
+                        // Compara pelo nome do arquivo (ignora diferença de path/prefixo)
+                        const jaExiste = bibliotecaArquivos.has(fileName);
                         
                         if (!jaExiste) {
-                            // Usa tamanho estimado para ser mais rápido
-                            // Média de 10MB por vídeo (shorts ~5-15MB)
                             const tamanhoEstimado = 10 * 1024 * 1024; // 10MB
-                            
                             videosEncontradosNaPasta.push({
                                 arquivo: fileName,
                                 arquivoWebDAV: caminhoCompleto,
@@ -3516,6 +3526,8 @@
                                 tamanho: tamanhoEstimado,
                                 mimeType: 'video/mp4'
                             });
+                        } else {
+                            filtradosDuplicados++;
                         }
                     }
                     
@@ -3523,8 +3535,7 @@
                     
                     // Atualiza progresso a cada 100 arquivos
                     if (processados % BATCH_SIZE === 0) {
-                        showLoading(true, `Processando: ${processados}/${total} arquivos...`);
-                        // Pausa para não travar o navegador
+                        showLoading(true, `Processando: ${processados}/${total} arquivos... (${videosEncontradosNaPasta.length} novos, ${filtradosDuplicados} já na biblioteca)`);
                         await new Promise(resolve => setTimeout(resolve, 10));
                     }
                     
@@ -3535,8 +3546,14 @@
                     }
                 }
                 
+                console.log('[SCAN] Novos encontrados:', videosEncontradosNaPasta.length);
+                console.log('[SCAN] Filtrados como duplicados:', filtradosDuplicados);
+                
                 if (videosEncontradosNaPasta.length === 0) {
-                    showAlert('info', 'Nenhum vídeo novo encontrado na pasta (ou todos já estão na biblioteca)');
+                    const msg = filtradosDuplicados > 0
+                        ? `Todos os ${filtradosDuplicados} vídeo(s) encontrados já estão na biblioteca!`
+                        : `Nenhum vídeo encontrado em "${subpasta}". Verifique se a pasta existe e contém vídeos.`;
+                    showAlert('info', msg);
                     showLoading(false);
                     btn.disabled = false;
                     btn.textContent = '🔍 Buscar Vídeos na Pasta';

@@ -1525,6 +1525,20 @@
                     • Pode demorar 30-60 segundos com muitos arquivos
                 </div>
                 
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+                        📁 Caminho da pasta (opcional):
+                    </label>
+                    <input type="text" id="subpastaScan" placeholder="Deixe vazio para raiz, ou digite: videos" 
+                           style="width: 100%; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.95em;">
+                    <p style="margin-top: 8px; font-size: 0.85em; color: var(--text-secondary);">
+                        💡 <strong>Exemplos:</strong><br>
+                        • Vazio = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">X:\autopost\</code><br>
+                        • "videos" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">X:\autopost\videos\</code><br>
+                        • "shorts/lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">X:\autopost\shorts\lote1\</code>
+                    </p>
+                </div>
+                
                 <button class="btn btn-primary" id="btnBuscarVideos" onclick="buscarVideosNaPasta()" style="width: 100%; margin-bottom: 20px;">
                     🔍 Buscar Vídeos na Pasta
                 </button>
@@ -3428,14 +3442,24 @@
             btn.disabled = true;
             btn.textContent = '🔍 Buscando...';
             
-            showLoading(true, 'Escaneando pasta (pode demorar com muitos arquivos)...');
+            // Pega caminho da subpasta (se especificado)
+            let subpasta = document.getElementById('subpastaScan').value.trim();
+            if (subpasta) {
+                // Remove barras do início e fim
+                subpasta = subpasta.replace(/^\/+|\/+$/g, '');
+                // Adiciona barra no final
+                subpasta = subpasta + '/';
+            }
+            
+            const caminhoExibicao = subpasta ? `pasta "${subpasta}"` : 'raiz';
+            showLoading(true, `Escaneando ${caminhoExibicao} (pode demorar)...`);
             
             try {
                 // Lista arquivos do WebDAV com timeout aumentado
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos
                 
-                const response = await webdav.request('', 'PROPFIND', null, {
+                const response = await webdav.request(subpasta, 'PROPFIND', null, {
                     'Depth': '1',
                     'Content-Type': 'application/xml'
                 }, controller.signal);
@@ -3478,10 +3502,13 @@
                             // Média de 10MB por vídeo (shorts ~5-15MB)
                             const tamanhoEstimado = 10 * 1024 * 1024; // 10MB
                             
+                            // Monta URL completa com subpasta se especificada
+                            const caminhoCompleto = subpasta ? subpasta + fileName : fileName;
+                            
                             videosEncontradosNaPasta.push({
                                 arquivo: fileName,
-                                arquivoWebDAV: fileName,
-                                webdavUrl: WEBDAV_CONFIG.url + fileName,
+                                arquivoWebDAV: caminhoCompleto,
+                                webdavUrl: WEBDAV_CONFIG.url + caminhoCompleto,
                                 tamanho: tamanhoEstimado,
                                 mimeType: 'video/mp4'
                             });

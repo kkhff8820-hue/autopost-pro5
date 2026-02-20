@@ -1533,9 +1533,9 @@
                            style="width: 100%; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.95em;">
                     <p style="margin-top: 8px; font-size: 0.85em; color: var(--text-secondary);">
                         💡 <strong>Exemplos:</strong><br>
-                        • Vazio = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">X:\autopost\</code><br>
-                        • "videos" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">X:\autopost\videos\</code><br>
-                        • "shorts/lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">X:\autopost\shorts\lote1\</code>
+                        • Vazio = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/videos/</code> (padrão)<br>
+                        • "lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/videos/lote1/</code><br>
+                        • "shorts/lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/videos/shorts/lote1/</code>
                     </p>
                 </div>
                 
@@ -1663,7 +1663,7 @@
                 this.authHeader = 'Basic ' + btoa(username + ':' + password);
             }
 
-            async request(path, method = 'GET', body = null, headers = {}) {
+            async request(path, method = 'GET', body = null, headers = {}, signal = null) {
                 const url = this.baseUrl + path;
                 const options = {
                     method: method,
@@ -1674,6 +1674,7 @@
                     }
                 };
                 if (body) options.body = body;
+                if (signal) options.signal = signal;
                 const response = await fetch(url, options);
                 return response;
             }
@@ -3447,11 +3448,14 @@
             if (subpasta) {
                 // Remove barras do início e fim
                 subpasta = subpasta.replace(/^\/+|\/+$/g, '');
-                // Adiciona barra no final
-                subpasta = subpasta + '/';
+                // Adiciona prefixo da pasta de vídeos e barra no final
+                subpasta = 'autopost/videos/' + subpasta + '/';
+            } else {
+                // Padrão: pasta onde os vídeos são salvos pelo sistema
+                subpasta = 'autopost/videos/';
             }
             
-            const caminhoExibicao = subpasta ? `pasta "${subpasta}"` : 'raiz';
+            const caminhoExibicao = `"${subpasta}"`;
             showLoading(true, `Escaneando ${caminhoExibicao} (pode demorar)...`);
             
             try {

@@ -3458,7 +3458,23 @@
             const caminhoExibicao = `"${subpasta}"`;
             showLoading(true, `Escaneando ${caminhoExibicao} (pode demorar)...`);
             
+            // Mostra painel de debug
+                const debugPanel = document.getElementById('debugPanel') || (() => {
+                    const d = document.createElement('div');
+                    d.id = 'debugPanel';
+                    d.style = 'background:#111;color:#0f0;font-family:monospace;font-size:12px;padding:15px;border-radius:8px;margin-top:15px;max-height:200px;overflow-y:auto;white-space:pre-wrap;border:1px solid #0f0;';
+                    document.getElementById('videosEncontrados').before(d);
+                    return d;
+                })();
+                const debug = (msg) => { debugPanel.textContent += msg + '\n'; debugPanel.scrollTop = 9999; console.log(msg); };
+                debugPanel.textContent = '';
+                debugPanel.style.display = 'block';
+                
             try {
+                const fullUrl = webdav.baseUrl + subpasta;
+                debug('URL: ' + fullUrl);
+                debug('Biblioteca tem: ' + biblioteca.length + ' vídeos');
+                
                 // Lista arquivos do WebDAV com timeout aumentado
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos
@@ -3470,9 +3486,17 @@
                 
                 clearTimeout(timeoutId);
                 
+                debug('HTTP Status: ' + response.status + ' ' + response.statusText);
+                
                 showLoading(true, 'Processando lista de arquivos...');
                 
                 const text = await response.text();
+                debug('Resposta length: ' + text.length + ' chars');
+                debug('Início da resposta: ' + text.substring(0, 300));
+                
+                if (!response.ok && response.status !== 207) {
+                    throw new Error('Servidor retornou ' + response.status + ': ' + text.substring(0, 200));
+                }
                 
                 // Pausa para não travar o navegador
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -3485,6 +3509,12 @@
                 // Extrai nomes dos arquivos
                 const hrefs = xmlDoc.getElementsByTagName('href');
                 const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v'];
+                
+                debug('HREFs encontrados no XML: ' + hrefs.length);
+                // Mostra os primeiros 5 hrefs para diagnóstico
+                for (let x = 0; x < Math.min(5, hrefs.length); x++) {
+                    debug('  href[' + x + ']: ' + hrefs[x].textContent);
+                }
                 
                 videosEncontradosNaPasta = [];
                 let processados = 0;

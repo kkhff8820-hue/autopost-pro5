@@ -3507,7 +3507,10 @@
                 const xmlDoc = parser.parseFromString(text, 'text/xml');
                 
                 // Extrai nomes dos arquivos
-                const hrefs = xmlDoc.getElementsByTagName('href');
+                // O servidor retorna namespace D:href, então buscamos das duas formas
+                let hrefs = xmlDoc.getElementsByTagNameNS('DAV:', 'href');
+                if (hrefs.length === 0) hrefs = xmlDoc.getElementsByTagName('href');
+                if (hrefs.length === 0) hrefs = xmlDoc.getElementsByTagName('D:href');
                 const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v'];
                 
                 debug('HREFs encontrados no XML: ' + hrefs.length);

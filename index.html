@@ -3494,16 +3494,16 @@
                     const fileName = decodeURIComponent(href.split('/').pop());
                     
                     if (fileName && videoExtensions.some(ext => fileName.toLowerCase().endsWith(ext))) {
-                        // Verifica se não está já na biblioteca
-                        const jaExiste = biblioteca.some(v => v.arquivoWebDAV === fileName);
+                        // Monta caminho completo ANTES de verificar duplicados
+                        const caminhoCompleto = subpasta ? subpasta + fileName : fileName;
+                        
+                        // Verifica se não está já na biblioteca (compara caminho completo!)
+                        const jaExiste = biblioteca.some(v => v.arquivoWebDAV === caminhoCompleto);
                         
                         if (!jaExiste) {
                             // Usa tamanho estimado para ser mais rápido
                             // Média de 10MB por vídeo (shorts ~5-15MB)
                             const tamanhoEstimado = 10 * 1024 * 1024; // 10MB
-                            
-                            // Monta URL completa com subpasta se especificada
-                            const caminhoCompleto = subpasta ? subpasta + fileName : fileName;
                             
                             videosEncontradosNaPasta.push({
                                 arquivo: fileName,

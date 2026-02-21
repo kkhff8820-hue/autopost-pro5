@@ -3448,11 +3448,11 @@
             if (subpasta) {
                 // Remove barras do início e fim
                 subpasta = subpasta.replace(/^\/+|\/+$/g, '');
-                // Adiciona prefixo da pasta de vídeos e barra no final
-                subpasta = 'autopost/videos/' + subpasta + '/';
+                // Adiciona prefixo da pasta autopost e barra no final
+                subpasta = 'autopost/' + subpasta + '/';
             } else {
-                // Padrão: pasta onde os vídeos são salvos pelo sistema
-                subpasta = 'autopost/videos/';
+                // Padrão: pasta raiz do autopost
+                subpasta = 'autopost/';
             }
             
             const caminhoExibicao = `"${subpasta}"`;

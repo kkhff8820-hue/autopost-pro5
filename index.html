@@ -1903,85 +1903,128 @@
         }
 
         // ========== DATA ==========
-        // ========== LOCALSTORAGE BACKUP ==========
-        // Garante que os dados persistam mesmo se o WebDAV falhar temporariamente
+        // ========== PERSISTÊNCIA: localStorage como fonte de verdade ==========
+        // ESTRATÉGIA:
+        // 1. localStorage é sempre a fonte primária — nunca apagado automaticamente
+        // 2. WebDAV é backup secundário (sincroniza quando disponível)
+        // 3. Ao carregar: localStorage primeiro, depois WebDAV só substitui se tiver dados reais
+        // 4. Ao salvar: localStorage SEMPRE, WebDAV quando conectado
+
+        const LS_KEYS = {
+            videos:    'autopost_videos',
+            logs:      'autopost_logs',
+            contas:    'autopost_contas',
+            biblioteca:'autopost_biblioteca',
+            videosbank:'autopost_videosbank',
+        };
+
         function saveToLocalStorage() {
             try {
-                localStorage.setItem('autopost_videos',    JSON.stringify(allVideos));
-                localStorage.setItem('autopost_logs',      JSON.stringify(allLogs));
-                localStorage.setItem('autopost_contas',    JSON.stringify(allContas));
-                localStorage.setItem('autopost_biblioteca',JSON.stringify(biblioteca));
-                localStorage.setItem('autopost_videosbank',JSON.stringify(videosBank));
-                console.log('[LocalStorage] Backup salvo com sucesso');
+                localStorage.setItem(LS_KEYS.videos,     JSON.stringify(allVideos));
+                localStorage.setItem(LS_KEYS.logs,       JSON.stringify(allLogs));
+                localStorage.setItem(LS_KEYS.contas,     JSON.stringify(allContas));
+                localStorage.setItem(LS_KEYS.biblioteca, JSON.stringify(biblioteca));
+                localStorage.setItem(LS_KEYS.videosbank, JSON.stringify(videosBank));
+                console.log(`[LS] Salvo: ${allContas.length} contas, ${allVideos.length} vídeos, ${biblioteca.length} biblioteca`);
             } catch (e) {
-                console.warn('[LocalStorage] Falha no backup:', e.message);
+                console.warn('[LS] Falha ao salvar:', e.message);
             }
         }
 
         function loadFromLocalStorage() {
+            // Carrega dados do localStorage para as variáveis globais
+            // Retorna true se encontrou pelo menos algum dado
+            let encontrouAlgo = false;
             try {
-                const videos    = localStorage.getItem('autopost_videos');
-                const logs      = localStorage.getItem('autopost_logs');
-                const contas    = localStorage.getItem('autopost_contas');
-                const bib       = localStorage.getItem('autopost_biblioteca');
-                const bank      = localStorage.getItem('autopost_videosbank');
+                const lsVideos = localStorage.getItem(LS_KEYS.videos);
+                const lsLogs   = localStorage.getItem(LS_KEYS.logs);
+                const lsContas = localStorage.getItem(LS_KEYS.contas);
+                const lsBib    = localStorage.getItem(LS_KEYS.biblioteca);
+                const lsBank   = localStorage.getItem(LS_KEYS.videosbank);
 
-                if (videos)    allVideos   = JSON.parse(videos);
-                if (logs)      allLogs     = JSON.parse(logs);
-                if (contas)    allContas   = JSON.parse(contas);
-                if (bib)       biblioteca  = JSON.parse(bib);
-                if (bank)      videosBank  = JSON.parse(bank);
+                if (lsVideos) { allVideos   = JSON.parse(lsVideos);  encontrouAlgo = true; }
+                if (lsLogs)   { allLogs     = JSON.parse(lsLogs); }
+                if (lsContas) { allContas   = JSON.parse(lsContas);   encontrouAlgo = true; }
+                if (lsBib)    { biblioteca  = JSON.parse(lsBib);      encontrouAlgo = true; }
+                if (lsBank)   { videosBank  = JSON.parse(lsBank);     encontrouAlgo = true; }
 
-                const temContas = allContas.length > 0;
-                console.log(`[LocalStorage] Backup carregado: ${allContas.length} contas, ${allVideos.length} vídeos`);
-                return temContas;
+                console.log(`[LS] Carregado: ${allContas.length} contas, ${allVideos.length} vídeos, ${biblioteca.length} biblioteca`);
             } catch (e) {
-                console.warn('[LocalStorage] Falha ao carregar backup:', e.message);
-                return false;
+                console.warn('[LS] Falha ao carregar:', e.message);
             }
+            return encontrouAlgo;
         }
 
         async function loadAllData() {
+            // PASSO 1: Carrega localStorage PRIMEIRO como base segura
+            const temDadosLocais = loadFromLocalStorage();
+            if (temDadosLocais) {
+                console.log('[LOAD] Dados locais carregados como base');
+            }
+
+            // PASSO 2: Tenta sincronizar com WebDAV
+            // IMPORTANTE: só substitui os dados locais se o WebDAV retornar dados REAIS (não null/vazio)
             const arquivos = [
-                { nome: 'videos.json',     set: v => { allVideos  = v; } },
-                { nome: 'logs.json',       set: v => { allLogs    = v; } },
-                { nome: 'contas.json',     set: v => { allContas  = v; } },
-                { nome: 'biblioteca.json', set: v => { biblioteca = v; } },
-                { nome: 'videosbank.json', set: v => { videosBank = v; } },
+                { nome: 'videos.json',     get: () => allVideos,  set: v => { allVideos   = v; } },
+                { nome: 'logs.json',       get: () => allLogs,    set: v => { allLogs     = v; } },
+                { nome: 'contas.json',     get: () => allContas,  set: v => { allContas   = v; } },
+                { nome: 'biblioteca.json', get: () => biblioteca, set: v => { biblioteca  = v; } },
+                { nome: 'videosbank.json', get: () => videosBank, set: v => { videosBank  = v; } },
             ];
 
+            let webdavSincronizou = false;
             const erros = [];
+
             for (const arq of arquivos) {
                 try {
-                    const data = await webdav.loadJSON(arq.nome);
-                    arq.set(data || []);
+                    const dadosWebDAV = await webdav.loadJSON(arq.nome);
+                    if (dadosWebDAV !== null && Array.isArray(dadosWebDAV)) {
+                        // WebDAV tem dados reais → usa eles
+                        arq.set(dadosWebDAV);
+                        webdavSincronizou = true;
+                        console.log(`[LOAD] WebDAV: ${arq.nome} → ${dadosWebDAV.length} itens`);
+                    } else {
+                        // WebDAV retornou null (arquivo não existe ainda) → mantém dados do localStorage
+                        // Se temos dados locais, sobe eles pro WebDAV imediatamente
+                        if (arq.get().length > 0) {
+                            console.log(`[LOAD] WebDAV sem ${arq.nome} — fazendo upload dos dados locais...`);
+                            try {
+                                await webdav.saveJSON(arq.nome, arq.get());
+                                console.log(`[LOAD] Upload de ${arq.nome} concluído`);
+                            } catch (saveErr) {
+                                console.warn(`[LOAD] Falha ao subir ${arq.nome}:`, saveErr.message);
+                            }
+                        }
+                    }
                 } catch (e) {
-                    arq.set([]);
+                    // Erro de rede / timeout — mantém dados do localStorage
                     erros.push(`${arq.nome}: ${traduzirErro(e)}`);
+                    console.warn(`[LOAD] Erro ao carregar ${arq.nome}:`, e.message);
                 }
             }
 
+            // PASSO 3: Salva localStorage com os dados mais recentes (WebDAV ou locais)
+            saveToLocalStorage();
+
             if (erros.length > 0) {
-                mostrarErroPersistente('Falha ao carregar dados — ' + erros[0]);
-                console.error('[LOAD] Erros:', erros);
-                // Tenta recuperar do backup local se o WebDAV falhou
-                const recuperado = loadFromLocalStorage();
-                if (recuperado) {
-                    showAlert('warning', '⚠️ WebDAV falhou — dados carregados do backup local!');
+                console.error('[LOAD] Erros de rede:', erros);
+                if (temDadosLocais) {
+                    showAlert('warning', `⚠️ Alguns arquivos do WebDAV falharam — usando dados locais`);
+                } else {
+                    mostrarErroPersistente('Falha ao carregar dados — ' + erros[0]);
                 }
-            } else {
-                // Salva backup local sempre que carrega com sucesso do WebDAV
-                saveToLocalStorage();
-                await addLog('success', `Dados carregados: ${allVideos.length} vídeos, ${biblioteca.length} biblioteca, ${allContas.length} contas, ${videosBank.length} banco`);
             }
+
+            const fonte = webdavSincronizou ? 'WebDAV' : 'backup local';
+            await addLog('success', `Dados carregados (${fonte}): ${allVideos.length} vídeos, ${biblioteca.length} biblioteca, ${allContas.length} contas`);
         }
 
         async function saveData() {
-            // Sempre salva backup local primeiro (garantia de não perder dados)
+            // SEMPRE salva no localStorage primeiro — nunca perde dados
             saveToLocalStorage();
 
             if (!webdavConnected) {
-                mostrarErroPersistente('WebDAV desconectado. Reconecte o servidor para continuar salvando.');
+                mostrarErroPersistente('WebDAV desconectado — dados salvos localmente. Reconecte para sincronizar.');
                 return false;
             }
 
@@ -1999,6 +2042,7 @@
                     await webdav.saveJSON(arq.nome, arq.dados);
                 } catch (e) {
                     erros.push({ arquivo: arq.nome, motivo: traduzirErro(e) });
+                    console.error(`[SAVE] Erro em ${arq.nome}:`, e.message);
                 }
             }
 
@@ -2006,7 +2050,7 @@
                 const principal = erros[0];
                 const extra = erros.length > 1 ? ` (+${erros.length - 1} outro(s))` : '';
                 mostrarErroPersistente(
-                    `Erro ao salvar <strong>${principal.arquivo}</strong>: ${principal.motivo}${extra}`
+                    `WebDAV: erro ao salvar <strong>${principal.arquivo}</strong>: ${principal.motivo}${extra} — dados preservados localmente`
                 );
                 console.error('[SAVE] Erros:', erros);
                 return false;
@@ -3089,16 +3133,16 @@
                 webdavConnected = false;
                 updateStatusIndicator(false);
 
-                // Tenta carregar do backup local mesmo sem WebDAV
-                const recuperado = loadFromLocalStorage();
-                if (recuperado) {
+                // Mesmo sem WebDAV, carrega dados locais
+                const temDados = loadFromLocalStorage();
+                if (temDados) {
                     await renderVideos();
                     await renderContas();
                     renderLogs();
-                    showAlert('warning', '⚠️ WebDAV offline — dados carregados do backup local. Reconecte para sincronizar.');
+                    showAlert('warning', '⚠️ WebDAV offline — usando dados locais. Reconecte para sincronizar.');
                     await addLog('warning', 'WebDAV offline, usando backup local: ' + e.message);
                 } else {
-                    showAlert('error', 'Erro: ' + e.message);
+                    showAlert('error', 'Sem conexão e sem dados locais: ' + e.message);
                     await addLog('error', 'Erro na conexão', e.message);
                 }
             }

@@ -1852,9 +1852,9 @@
                 text.textContent = 'Online (sync ativo)';
             } else if (connected && canWrite === false) {
                 dot.classList.remove('offline');
-                dot.style.background = 'var(--accent-warning)';
-                dot.style.boxShadow = '0 0 10px var(--accent-warning)';
-                text.textContent = 'Online (só leitura — salvo local)';
+                dot.style.background = '';
+                dot.style.boxShadow = '';
+                text.textContent = 'Sistema Online';
             } else if (connected) {
                 dot.classList.remove('offline');
                 dot.style.background = '';
@@ -2067,12 +2067,7 @@
 
             if (erros.length > 0) {
                 // WebDAV falhou mas localStorage já salvou — não trava o usuário
-                // Marca que não conseguimos mais escrever e atualiza status
-                webdavCanWrite = false;
-                updateStatusIndicator(webdavConnected, false);
-                console.warn('[SAVE] WebDAV com erro de escrita — desabilitando sync. Dados preservados localmente.', erros);
-                // Mostra aviso sutil (não o banner vermelho assustador)
-                showAlert('warning', '⚠️ Sync WebDAV falhou — dados salvos localmente no navegador');
+                console.warn('[SAVE] Erro ao salvar no WebDAV (dados preservados localmente):', erros);
                 return false;
             }
 
@@ -3139,15 +3134,9 @@
                 if (connected) {
                     webdavConnected = true;
 
-                    // Testa separadamente se o servidor aceita escrita (PUT)
-                    showLoading(true, 'Testando permissão de escrita...');
-                    webdavCanWrite = await webdav.testWrite();
-                    updateStatusIndicator(true, webdavCanWrite);
-
-                    if (!webdavCanWrite) {
-                        showAlert('warning', '⚠️ WebDAV conectado mas somente leitura (HTTP 405). Dados serão salvos localmente.');
-                        await addLog('warning', 'WebDAV: servidor não aceita escrita (PUT 405) — usando localStorage');
-                    }
+                    // Assume que pode escrever — saveData vai detectar erros caso não consiga
+                    webdavCanWrite = true;
+                    updateStatusIndicator(true, true);
 
                     await loadAllData();
                     await renderVideos();
@@ -3155,11 +3144,7 @@
                     renderLogs();
                     await startWorker();
 
-                    if (webdavCanWrite) {
-                        showAlert('success', '✅ Sistema online com sync WebDAV!');
-                    } else {
-                        showAlert('info', '💾 Sistema online — dados salvos localmente no navegador');
-                    }
+                    showAlert('success', '✅ Sistema online!');
                     await addLog('success', 'Sistema iniciado - Múltiplas contas');
                 } else {
                     throw new Error('Falha ao conectar');

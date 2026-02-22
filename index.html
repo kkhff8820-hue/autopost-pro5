@@ -1986,14 +1986,19 @@
         }
 
         async function loadAllData() {
-            // PASSO 1: Carrega localStorage PRIMEIRO como base segura
+            // PASSO 1: localStorage é sempre a fonte primária — carrega primeiro
             const temDadosLocais = loadFromLocalStorage();
-            if (temDadosLocais) {
-                console.log('[LOAD] Dados locais carregados como base');
+            console.log(`[LOAD] localStorage: ${allContas.length} contas, ${allVideos.length} vídeos, ${biblioteca.length} biblioteca`);
+
+            // PASSO 2: Só tenta sync com WebDAV se ele puder ESCREVER também
+            // Se só lê (405), não adianta nada — localStorage já é suficiente
+            if (!webdavCanWrite) {
+                console.log('[LOAD] WebDAV readonly ou offline — usando apenas localStorage');
+                await addLog('success', `Dados carregados (local): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
+                return;
             }
 
-            // PASSO 2: Tenta sincronizar com WebDAV
-            // IMPORTANTE: só substitui os dados locais se o WebDAV retornar dados REAIS (não null/vazio)
+            // PASSO 3: WebDAV pode escrever — sincroniza bidirecional
             const arquivos = [
                 { nome: 'videos.json',     get: () => allVideos,  set: v => { allVideos   = v; } },
                 { nome: 'logs.json',       get: () => allLogs,    set: v => { allLogs     = v; } },
@@ -2002,61 +2007,44 @@
                 { nome: 'videosbank.json', get: () => videosBank, set: v => { videosBank  = v; } },
             ];
 
-            let webdavSincronizou = false;
-            const erros = [];
-
             for (const arq of arquivos) {
                 try {
                     const dadosWebDAV = await webdav.loadJSON(arq.nome);
-                    if (dadosWebDAV !== null && Array.isArray(dadosWebDAV)) {
-                        // WebDAV tem dados reais → usa eles
-                        arq.set(dadosWebDAV);
-                        webdavSincronizou = true;
-                        console.log(`[LOAD] WebDAV: ${arq.nome} → ${dadosWebDAV.length} itens`);
-                    } else {
-                        // WebDAV retornou null (arquivo não existe ainda) → mantém dados do localStorage
-                        // Se temos dados locais, sobe eles pro WebDAV imediatamente
-                        if (arq.get().length > 0) {
-                            console.log(`[LOAD] WebDAV sem ${arq.nome} — fazendo upload dos dados locais...`);
-                            try {
-                                await webdav.saveJSON(arq.nome, arq.get());
-                                console.log(`[LOAD] Upload de ${arq.nome} concluído`);
-                            } catch (saveErr) {
-                                console.warn(`[LOAD] Falha ao subir ${arq.nome}:`, saveErr.message);
-                            }
+                    const localLen = arq.get().length;
+
+                    if (dadosWebDAV !== null && Array.isArray(dadosWebDAV) && dadosWebDAV.length > 0) {
+                        if (dadosWebDAV.length >= localLen) {
+                            // WebDAV tem dados iguais ou mais completos → usa WebDAV
+                            arq.set(dadosWebDAV);
+                            console.log(`[LOAD] WebDAV → ${arq.nome}: ${dadosWebDAV.length} itens`);
+                        } else {
+                            // localStorage tem mais dados → sobe para WebDAV
+                            console.log(`[LOAD] localStorage mais completo (${localLen} > ${dadosWebDAV.length}) → subindo para WebDAV`);
+                            await webdav.saveJSON(arq.nome, arq.get());
                         }
+                    } else if (localLen > 0) {
+                        // WebDAV vazio/nulo mas localStorage tem dados → sobe para WebDAV
+                        console.log(`[LOAD] WebDAV vazio para ${arq.nome} — subindo ${localLen} itens do localStorage`);
+                        await webdav.saveJSON(arq.nome, arq.get());
                     }
                 } catch (e) {
-                    // Erro de rede / timeout — mantém dados do localStorage
-                    erros.push(`${arq.nome}: ${traduzirErro(e)}`);
-                    console.warn(`[LOAD] Erro ao carregar ${arq.nome}:`, e.message);
+                    console.warn(`[LOAD] Erro ao sincronizar ${arq.nome}:`, e.message);
                 }
             }
 
-            // PASSO 3: Salva localStorage com os dados mais recentes (WebDAV ou locais)
+            // Garante localStorage atualizado
             saveToLocalStorage();
 
-            if (erros.length > 0) {
-                console.error('[LOAD] Erros de rede:', erros);
-                if (temDadosLocais) {
-                    showAlert('warning', `⚠️ Alguns arquivos do WebDAV falharam — usando dados locais`);
-                } else {
-                    mostrarErroPersistente('Falha ao carregar dados — ' + erros[0]);
-                }
-            }
-
-            const fonte = webdavSincronizou ? 'WebDAV' : 'backup local';
-            await addLog('success', `Dados carregados (${fonte}): ${allVideos.length} vídeos, ${biblioteca.length} biblioteca, ${allContas.length} contas`);
+            await addLog('success', `Dados sincronizados (WebDAV): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
         }
 
         async function saveData() {
-            // SEMPRE salva no localStorage primeiro — nunca perde dados
+            // SEMPRE salva no localStorage — é a fonte primária de dados
             saveToLocalStorage();
 
-            // Se WebDAV não pode escrever, só localStorage já é suficiente — sem erro
+            // WebDAV indisponível para escrita? localStorage já garantiu os dados — retorna ok
             if (!webdavConnected || !webdavCanWrite) {
-                console.log('[SAVE] localStorage OK. WebDAV indisponível para escrita — ignorando.');
-                return true; // dados estão salvos no localStorage
+                return true;
             }
 
             const arquivos = [

@@ -943,34 +943,34 @@
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('biblioteca')">
+            <button class="tab active" onclick="switchTab(event, 'biblioteca')">
                 📚 Biblioteca
                 <span class="tab-badge" id="countBiblioteca">0</span>
             </button>
-            <button class="tab" onclick="switchTab('pendentes')">
+            <button class="tab" onclick="switchTab(event, 'pendentes')">
                 📋 Pendentes
                 <span class="tab-badge" id="countPendentes">0</span>
             </button>
-            <button class="tab" onclick="switchTab('postados')">
+            <button class="tab" onclick="switchTab(event, 'postados')">
                 ✅ Postados
                 <span class="tab-badge" id="countPostados">0</span>
             </button>
-            <button class="tab" onclick="switchTab('falhas')">
+            <button class="tab" onclick="switchTab(event, 'falhas')">
                 ❌ Falhas
                 <span class="tab-badge" id="countFalhas">0</span>
             </button>
-            <button class="tab" onclick="switchTab('banco')">
+            <button class="tab" onclick="switchTab(event, 'banco')">
                 📦 Banco
                 <span class="tab-badge" id="countBanco">0</span>
             </button>
-            <button class="tab" onclick="switchTab('contas')">
+            <button class="tab" onclick="switchTab(event, 'contas')">
                 👥 Contas
                 <span class="tab-badge" id="countContas">0</span>
             </button>
-            <button class="tab" onclick="switchTab('dashboard')">
+            <button class="tab" onclick="switchTab(event, 'dashboard')">
                 📊 Dashboard
             </button>
-            <button class="tab" onclick="switchTab('logs')">
+            <button class="tab" onclick="switchTab(event, 'logs')">
                 📝 Logs
             </button>
         </div>
@@ -1714,7 +1714,11 @@
                 const response = await this.request('autopost/' + fileName, 'PUT', content, {
                     'Content-Type': 'application/json'
                 });
-                return response.ok || response.status === 201 || response.status === 204;
+                const ok = response.ok || response.status === 201 || response.status === 204;
+                if (!ok) {
+                    throw new Error(`Servidor recusou gravação de ${fileName} (HTTP ${response.status})`);
+                }
+                return true;
             }
 
             async loadJSON(fileName) {
@@ -1849,10 +1853,10 @@
             document.getElementById(modalId).classList.remove('active');
         }
 
-        function switchTab(tabName) {
+        function switchTab(event, tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            event.target.classList.add('active');
+            event.currentTarget.classList.add('active');
             document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
         }
 
@@ -1899,6 +1903,44 @@
         }
 
         // ========== DATA ==========
+        // ========== LOCALSTORAGE BACKUP ==========
+        // Garante que os dados persistam mesmo se o WebDAV falhar temporariamente
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('autopost_videos',    JSON.stringify(allVideos));
+                localStorage.setItem('autopost_logs',      JSON.stringify(allLogs));
+                localStorage.setItem('autopost_contas',    JSON.stringify(allContas));
+                localStorage.setItem('autopost_biblioteca',JSON.stringify(biblioteca));
+                localStorage.setItem('autopost_videosbank',JSON.stringify(videosBank));
+                console.log('[LocalStorage] Backup salvo com sucesso');
+            } catch (e) {
+                console.warn('[LocalStorage] Falha no backup:', e.message);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const videos    = localStorage.getItem('autopost_videos');
+                const logs      = localStorage.getItem('autopost_logs');
+                const contas    = localStorage.getItem('autopost_contas');
+                const bib       = localStorage.getItem('autopost_biblioteca');
+                const bank      = localStorage.getItem('autopost_videosbank');
+
+                if (videos)    allVideos   = JSON.parse(videos);
+                if (logs)      allLogs     = JSON.parse(logs);
+                if (contas)    allContas   = JSON.parse(contas);
+                if (bib)       biblioteca  = JSON.parse(bib);
+                if (bank)      videosBank  = JSON.parse(bank);
+
+                const temContas = allContas.length > 0;
+                console.log(`[LocalStorage] Backup carregado: ${allContas.length} contas, ${allVideos.length} vídeos`);
+                return temContas;
+            } catch (e) {
+                console.warn('[LocalStorage] Falha ao carregar backup:', e.message);
+                return false;
+            }
+        }
+
         async function loadAllData() {
             const arquivos = [
                 { nome: 'videos.json',     set: v => { allVideos  = v; } },
@@ -1922,12 +1964,22 @@
             if (erros.length > 0) {
                 mostrarErroPersistente('Falha ao carregar dados — ' + erros[0]);
                 console.error('[LOAD] Erros:', erros);
+                // Tenta recuperar do backup local se o WebDAV falhou
+                const recuperado = loadFromLocalStorage();
+                if (recuperado) {
+                    showAlert('warning', '⚠️ WebDAV falhou — dados carregados do backup local!');
+                }
             } else {
+                // Salva backup local sempre que carrega com sucesso do WebDAV
+                saveToLocalStorage();
                 await addLog('success', `Dados carregados: ${allVideos.length} vídeos, ${biblioteca.length} biblioteca, ${allContas.length} contas, ${videosBank.length} banco`);
             }
         }
 
         async function saveData() {
+            // Sempre salva backup local primeiro (garantia de não perder dados)
+            saveToLocalStorage();
+
             if (!webdavConnected) {
                 mostrarErroPersistente('WebDAV desconectado. Reconecte o servidor para continuar salvando.');
                 return false;
@@ -2158,6 +2210,9 @@
             if (postarEmTodas && contasAtivas.length === 0) {
                 showAlert('error', 'Nenhuma conta ativa encontrada!');
                 showLoading(false);
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = '✅ Adicionar Vídeos';
+                isProcessingUpload = false;
                 return;
             }
 
@@ -2261,6 +2316,34 @@
             isProcessingUpload = false;
         }
 
+        function renderContasModal() {
+            const container = document.getElementById('modalContasList');
+            if (!container) return;
+            if (allContas.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">Nenhuma conta cadastrada</div>';
+                return;
+            }
+            container.innerHTML = allContas.map(conta => `
+                <div style="padding: 15px; background: var(--bg-secondary); border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 1em; margin-bottom: 4px;">${conta.nome}</div>
+                        <div style="font-size: 0.85em; color: var(--text-secondary);">
+                            ${conta.accessToken ? '<span style="color: var(--accent-success);">✅ Autorizada</span>' : '<span style="color: var(--accent-warning);">⚠️ Não autorizada</span>'}
+                            &nbsp;·&nbsp;
+                            ${conta.ativa ? '<span style="color: var(--accent-success);">🟢 Ativa</span>' : '<span style="color: var(--accent-danger);">🔴 Pausada</span>'}
+                            &nbsp;·&nbsp;
+                            <span>${conta.videosPostados}/${conta.limiteUpload} uploads hoje</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-small btn-outline" onclick="autorizarConta(${conta.id})">🔑 Autorizar</button>
+                        <button class="btn btn-small" onclick="toggleConta(${conta.id})" style="background: var(--bg-card);">${conta.ativa ? '⏸ Pausar' : '▶ Ativar'}</button>
+                        <button class="btn btn-small btn-danger" onclick="deletarConta(${conta.id})">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
         // ========== CONTAS ==========
         function updateContaSelect() {
             const select = document.getElementById('videoConta');
@@ -2296,6 +2379,7 @@
             
             closeModal('modalAddConta');
             await renderContas();
+            renderContasModal();
             showAlert('success', 'Conta adicionada! Agora autorize no YouTube.');
 
             // Inicia OAuth
@@ -2353,6 +2437,7 @@
                     
                     await saveData();
                     await renderContas();
+                    renderContasModal();
                     updateStatusIndicator(true);
                     
                     showAlert('success', `Conta ${conta.nome} autorizada!`);
@@ -2373,6 +2458,7 @@
                 conta.ativa = !conta.ativa;
                 await saveData();
                 await renderContas();
+                renderContasModal();
                 showAlert('info', `Conta ${conta.ativa ? 'ativada' : 'pausada'}`);
                 await addLog('info', `Conta ${conta.nome} ${conta.ativa ? 'ativada' : 'pausada'}`);
             }
@@ -2384,6 +2470,7 @@
             allContas = allContas.filter(c => c.id !== id);
             await saveData();
             await renderContas();
+            renderContasModal();
             showAlert('success', `Conta ${conta.nome} deletada`);
             await addLog('info', `Conta deletada: ${conta.nome}`);
         }
@@ -2425,32 +2512,6 @@
             }).join('');
         }
 
-        function renderContasModal() {
-            const container = document.getElementById('modalContasList');
-            if (allContas.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">Nenhuma conta configurada</div>';
-                return;
-            }
-            container.innerHTML = allContas.map(conta => {
-                const inicial = conta.nome.charAt(0).toUpperCase();
-                const temToken = !!conta.accessToken;
-                return `
-                    <div class="conta-card">
-                        <div class="conta-avatar">${inicial}</div>
-                        <div class="conta-info">
-                            <div class="conta-nome">${conta.nome}</div>
-                            <div class="conta-stats">
-                                ${conta.videosPostados}/${conta.limiteUpload} uploads hoje • 
-                                ${temToken ? '🔑 Autorizada' : '⚠️ Não autorizada'}
-                            </div>
-                        </div>
-                        <div class="conta-status ${conta.ativa ? 'ativa' : 'inativa'}">
-                            ${conta.ativa ? '✅ Ativa' : '⏸️ Pausada'}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
 
         // Detecta retorno OAuth
         window.addEventListener('load', () => {
@@ -3027,8 +3088,19 @@
             } catch (e) {
                 webdavConnected = false;
                 updateStatusIndicator(false);
-                showAlert('error', 'Erro: ' + e.message);
-                await addLog('error', 'Erro na conexão', e.message);
+
+                // Tenta carregar do backup local mesmo sem WebDAV
+                const recuperado = loadFromLocalStorage();
+                if (recuperado) {
+                    await renderVideos();
+                    await renderContas();
+                    renderLogs();
+                    showAlert('warning', '⚠️ WebDAV offline — dados carregados do backup local. Reconecte para sincronizar.');
+                    await addLog('warning', 'WebDAV offline, usando backup local: ' + e.message);
+                } else {
+                    showAlert('error', 'Erro: ' + e.message);
+                    await addLog('error', 'Erro na conexão', e.message);
+                }
             }
 
             showLoading(false);
@@ -3081,7 +3153,7 @@
                                    onchange="toggleBibliotecaVideo(${v.id})"
                                    style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent-primary);">
                         </div>
-                        <div class="video-icon">🎬</div>
+                        <div class="video-thumbnail" style="font-size: 3em;">🎬</div>
                         <div class="video-title">${v.titulo}</div>
                         <div class="video-meta">
                             <span>📁 ${(v.tamanho / (1024 * 1024)).toFixed(2)} MB</span>

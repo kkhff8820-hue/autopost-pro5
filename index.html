@@ -1688,10 +1688,25 @@
                 }
             }
 
+            async testWrite() {
+                try {
+                    await this.ensureDirectory('autopost/');
+                    const response = await this.request('autopost/_test.json', 'PUT', '{}', {
+                        'Content-Type': 'application/json'
+                    });
+                    return response.ok || response.status === 201 || response.status === 204;
+                } catch (e) {
+                    return false;
+                }
+            }
+
             async ensureDirectory(dirPath) {
                 try {
-                    await this.request(dirPath, 'MKCOL');
-                } catch (e) {}
+                    const r = await this.request(dirPath, 'MKCOL');
+                    return r.status === 201 || r.status === 405 || r.ok;
+                } catch (e) {
+                    return false;
+                }
             }
 
             async uploadFile(fileName, content, contentType) {
@@ -1735,6 +1750,7 @@
         // ========== GLOBAL STATE ==========
         let webdav = null;
         let webdavConnected = false;
+        let webdavCanWrite = false;  // separado: servidor pode ter leitura mas não escrita
         let allVideos = [];
         let allLogs = [];
         let allContas = [];
@@ -1826,15 +1842,29 @@
             document.body.appendChild(banner);
         }
 
-        function updateStatusIndicator(connected) {
+        function updateStatusIndicator(connected, canWrite = null) {
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
-            if (connected) {
+            if (connected && canWrite === true) {
                 dot.classList.remove('offline');
+                dot.style.background = '';
+                dot.style.boxShadow = '';
+                text.textContent = 'Online (sync ativo)';
+            } else if (connected && canWrite === false) {
+                dot.classList.remove('offline');
+                dot.style.background = 'var(--accent-warning)';
+                dot.style.boxShadow = '0 0 10px var(--accent-warning)';
+                text.textContent = 'Online (só leitura — salvo local)';
+            } else if (connected) {
+                dot.classList.remove('offline');
+                dot.style.background = '';
+                dot.style.boxShadow = '';
                 text.textContent = 'Sistema Online';
             } else {
                 dot.classList.add('offline');
-                text.textContent = 'Offline';
+                dot.style.background = '';
+                dot.style.boxShadow = '';
+                text.textContent = 'Offline (salvo local)';
             }
         }
 
@@ -2023,9 +2053,10 @@
             // SEMPRE salva no localStorage primeiro — nunca perde dados
             saveToLocalStorage();
 
-            if (!webdavConnected) {
-                mostrarErroPersistente('WebDAV desconectado — dados salvos localmente. Reconecte para sincronizar.');
-                return false;
+            // Se WebDAV não pode escrever, só localStorage já é suficiente — sem erro
+            if (!webdavConnected || !webdavCanWrite) {
+                console.log('[SAVE] localStorage OK. WebDAV indisponível para escrita — ignorando.');
+                return true; // dados estão salvos no localStorage
             }
 
             const arquivos = [
@@ -2042,17 +2073,18 @@
                     await webdav.saveJSON(arq.nome, arq.dados);
                 } catch (e) {
                     erros.push({ arquivo: arq.nome, motivo: traduzirErro(e) });
-                    console.error(`[SAVE] Erro em ${arq.nome}:`, e.message);
+                    console.warn(`[SAVE] Erro WebDAV em ${arq.nome}:`, e.message);
                 }
             }
 
             if (erros.length > 0) {
-                const principal = erros[0];
-                const extra = erros.length > 1 ? ` (+${erros.length - 1} outro(s))` : '';
-                mostrarErroPersistente(
-                    `WebDAV: erro ao salvar <strong>${principal.arquivo}</strong>: ${principal.motivo}${extra} — dados preservados localmente`
-                );
-                console.error('[SAVE] Erros:', erros);
+                // WebDAV falhou mas localStorage já salvou — não trava o usuário
+                // Marca que não conseguimos mais escrever e atualiza status
+                webdavCanWrite = false;
+                updateStatusIndicator(webdavConnected, false);
+                console.warn('[SAVE] WebDAV com erro de escrita — desabilitando sync. Dados preservados localmente.', erros);
+                // Mostra aviso sutil (não o banner vermelho assustador)
+                showAlert('warning', '⚠️ Sync WebDAV falhou — dados salvos localmente no navegador');
                 return false;
             }
 
@@ -3118,13 +3150,28 @@
 
                 if (connected) {
                     webdavConnected = true;
-                    updateStatusIndicator(true);
+
+                    // Testa separadamente se o servidor aceita escrita (PUT)
+                    showLoading(true, 'Testando permissão de escrita...');
+                    webdavCanWrite = await webdav.testWrite();
+                    updateStatusIndicator(true, webdavCanWrite);
+
+                    if (!webdavCanWrite) {
+                        showAlert('warning', '⚠️ WebDAV conectado mas somente leitura (HTTP 405). Dados serão salvos localmente.');
+                        await addLog('warning', 'WebDAV: servidor não aceita escrita (PUT 405) — usando localStorage');
+                    }
+
                     await loadAllData();
                     await renderVideos();
                     await renderContas();
                     renderLogs();
                     await startWorker();
-                    showAlert('success', 'Sistema online!');
+
+                    if (webdavCanWrite) {
+                        showAlert('success', '✅ Sistema online com sync WebDAV!');
+                    } else {
+                        showAlert('info', '💾 Sistema online — dados salvos localmente no navegador');
+                    }
                     await addLog('success', 'Sistema iniciado - Múltiplas contas');
                 } else {
                     throw new Error('Falha ao conectar');

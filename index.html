@@ -1649,7 +1649,7 @@
     <script>
         // ========== CONFIG ==========
         const WEBDAV_CONFIG = {
-            url: 'https://heights-grad-weeks-return.trycloudflare.com/',
+            url: 'https://decent-forums-properly-somebody.trycloudflare.com/',
             username: 'miguel',
             password: '115411'
         };
@@ -1757,7 +1757,7 @@
             document.getElementById('loadingText').textContent = text;
         }
 
-        function showAlert(type, message) {
+        function showAlert(type, message, persistent = false) {
             const alert = document.createElement('div');
             alert.className = `alert ${type}`;
             const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
@@ -1767,7 +1767,59 @@
                 <button class="alert-close" onclick="this.parentElement.remove()">✕</button>
             `;
             document.body.appendChild(alert);
-            setTimeout(() => alert.remove(), 5000);
+            if (!persistent) setTimeout(() => alert.remove(), 5000);
+        }
+
+        function traduzirErro(erro) {
+            const msg = (erro?.message || String(erro)).toLowerCase();
+            if (msg.includes('err_name_not_resolved') || msg.includes('failed to fetch') || msg.includes('networkerror')) {
+                return 'Túnel Cloudflare expirou ou servidor offline. Gere uma nova URL e atualize o código.';
+            }
+            if (msg.includes('401') || msg.includes('unauthorized')) {
+                return 'Usuário/senha do WebDAV inválidos.';
+            }
+            if (msg.includes('403') || msg.includes('forbidden')) {
+                return 'Sem permissão para escrever no servidor WebDAV.';
+            }
+            if (msg.includes('404') || msg.includes('not found')) {
+                return 'Caminho não encontrado no WebDAV. Verifique se a pasta existe.';
+            }
+            if (msg.includes('timeout') || msg.includes('aborted')) {
+                return 'Timeout: o servidor demorou demais para responder.';
+            }
+            if (msg.includes('quota') || msg.includes('507')) {
+                return 'Sem espaço disponível no servidor WebDAV.';
+            }
+            if (msg.includes('cors')) {
+                return 'Erro de CORS: o servidor está bloqueando requisições do browser.';
+            }
+            return erro?.message || String(erro);
+        }
+
+        function mostrarErroPersistente(mensagem) {
+            document.getElementById('save-error-banner')?.remove();
+            const banner = document.createElement('div');
+            banner.id = 'save-error-banner';
+            banner.style.cssText = `
+                position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;
+                background: linear-gradient(90deg, #ff3864, #c0003c);
+                color: white; padding: 14px 20px;
+                display: flex; align-items: center; justify-content: space-between;
+                font-family: 'JetBrains Mono', monospace; font-size: 0.88em;
+                box-shadow: 0 -4px 20px rgba(255, 56, 100, 0.6);
+            `;
+            banner.innerHTML = `
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="font-size:1.5em;">🚨</span>
+                    <span><strong>DADOS NÃO SALVOS</strong> — ${mensagem}</span>
+                </div>
+                <button onclick="document.getElementById('save-error-banner').remove()"
+                    style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 14px;
+                    border-radius:8px;cursor:pointer;font-family:inherit;font-size:1em;">
+                    ✕ Fechar
+                </button>
+            `;
+            document.body.appendChild(banner);
         }
 
         function updateStatusIndicator(connected) {
@@ -1848,33 +1900,68 @@
 
         // ========== DATA ==========
         async function loadAllData() {
-            try {
-                const videosData = await webdav.loadJSON('videos.json');
-                allVideos = videosData || [];
-                const logsData = await webdav.loadJSON('logs.json');
-                allLogs = logsData || [];
-                const contasData = await webdav.loadJSON('contas.json');
-                allContas = contasData || [];
-                const bibliotecaData = await webdav.loadJSON('biblioteca.json');
-                biblioteca = bibliotecaData || [];
-                await addLog('success', `Dados carregados: ${allVideos.length} vídeos, ${biblioteca.length} biblioteca, ${allContas.length} contas`);
-            } catch (e) {
-                await addLog('error', 'Erro ao carregar dados', e.message);
+            const arquivos = [
+                { nome: 'videos.json',     set: v => { allVideos  = v; } },
+                { nome: 'logs.json',       set: v => { allLogs    = v; } },
+                { nome: 'contas.json',     set: v => { allContas  = v; } },
+                { nome: 'biblioteca.json', set: v => { biblioteca = v; } },
+                { nome: 'videosbank.json', set: v => { videosBank = v; } },
+            ];
+
+            const erros = [];
+            for (const arq of arquivos) {
+                try {
+                    const data = await webdav.loadJSON(arq.nome);
+                    arq.set(data || []);
+                } catch (e) {
+                    arq.set([]);
+                    erros.push(`${arq.nome}: ${traduzirErro(e)}`);
+                }
+            }
+
+            if (erros.length > 0) {
+                mostrarErroPersistente('Falha ao carregar dados — ' + erros[0]);
+                console.error('[LOAD] Erros:', erros);
+            } else {
+                await addLog('success', `Dados carregados: ${allVideos.length} vídeos, ${biblioteca.length} biblioteca, ${allContas.length} contas, ${videosBank.length} banco`);
             }
         }
 
         async function saveData() {
-            if (!webdavConnected) return false;
-            try {
-                await webdav.saveJSON('videos.json', allVideos);
-                await webdav.saveJSON('logs.json', allLogs);
-                await webdav.saveJSON('contas.json', allContas);
-                await webdav.saveJSON('biblioteca.json', biblioteca);
-                return true;
-            } catch (e) {
-                console.error('Erro ao salvar:', e);
+            if (!webdavConnected) {
+                mostrarErroPersistente('WebDAV desconectado. Reconecte o servidor para continuar salvando.');
                 return false;
             }
+
+            const arquivos = [
+                { nome: 'videos.json',     dados: allVideos },
+                { nome: 'logs.json',       dados: allLogs },
+                { nome: 'contas.json',     dados: allContas },
+                { nome: 'biblioteca.json', dados: biblioteca },
+                { nome: 'videosbank.json', dados: videosBank },
+            ];
+
+            const erros = [];
+            for (const arq of arquivos) {
+                try {
+                    await webdav.saveJSON(arq.nome, arq.dados);
+                } catch (e) {
+                    erros.push({ arquivo: arq.nome, motivo: traduzirErro(e) });
+                }
+            }
+
+            if (erros.length > 0) {
+                const principal = erros[0];
+                const extra = erros.length > 1 ? ` (+${erros.length - 1} outro(s))` : '';
+                mostrarErroPersistente(
+                    `Erro ao salvar <strong>${principal.arquivo}</strong>: ${principal.motivo}${extra}`
+                );
+                console.error('[SAVE] Erros:', erros);
+                return false;
+            }
+
+            document.getElementById('save-error-banner')?.remove();
+            return true;
         }
 
         // ========== FILE UPLOAD ==========
@@ -3448,11 +3535,11 @@
             if (subpasta) {
                 // Remove barras do início e fim
                 subpasta = subpasta.replace(/^\/+|\/+$/g, '');
-                // Adiciona prefixo da pasta autopost e barra no final
-                subpasta = 'autopost/' + subpasta + '/';
+                // Adiciona prefixo da pasta de vídeos e barra no final
+                subpasta = 'autopost/videos/' + subpasta + '/';
             } else {
-                // Padrão: pasta raiz do autopost
-                subpasta = 'autopost/';
+                // Padrão: pasta onde os vídeos são salvos pelo sistema
+                subpasta = 'autopost/videos/';
             }
             
             const caminhoExibicao = `"${subpasta}"`;

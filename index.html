@@ -1654,23 +1654,15 @@
             password: '115411'
         };
 
-        // Monta URL completa usando SEMPRE o host atual de WEBDAV_CONFIG.
-        // Se o path já for URL completa (vídeos antigos com túnel morto),
-        // extrai só o caminho e reconstrói com a URL atual — nunca fica preso em host antigo.
+        // Monta URL do vídeo usando SEMPRE o host atual + caminho fixo /autopost/videos/.
+        // Extrai só o nome do arquivo de qualquer formato: URL completa, caminho relativo ou só o nome.
+        // Assim funciona com vídeos antigos, novos, e após qualquer troca de túnel.
         function resolveWebdavUrl(path) {
             if (!path) return null;
+            // Pega só o nome do arquivo (tudo depois da última /)
+            const filename = path.split('/').pop();
             const base = WEBDAV_CONFIG.url.replace(/\/$/, '');
-            if (path.startsWith('http')) {
-                try {
-                    // Pega só o pathname da URL antiga e reconstrói com host atual
-                    const rel = new URL(path).pathname;
-                    return base + rel;
-                } catch(e) {
-                    return path; // fallback: URL malformada, usa como está
-                }
-            }
-            const rel = path.startsWith('/') ? path : '/' + path;
-            return base + rel;
+            return base + '/autopost/videos/' + filename;
         }
 
         // ========== WEBDAV CLIENT ==========
@@ -1737,7 +1729,7 @@
                 });
                 
                 if (response.ok || response.status === 201 || response.status === 204) {
-                    return 'autopost/videos/' + fileName;  // só o caminho — host montado na hora com resolveWebdavUrl()
+                    return fileName;  // só o nome — URL montada na hora com resolveWebdavUrl()
                 }
                 throw new Error('Upload falhou');
             }
@@ -3799,7 +3791,7 @@
                             videosEncontradosNaPasta.push({
                                 arquivo: fileName,
                                 arquivoWebDAV: caminhoCompleto,
-                                webdavUrl: caminhoCompleto,  // só caminho — host montado na hora com resolveWebdavUrl()
+                                webdavUrl: fileName,  // só o nome — URL montada na hora com resolveWebdavUrl()
                                 tamanho: tamanhoEstimado,
                                 mimeType: 'video/mp4'
                             });

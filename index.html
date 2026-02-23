@@ -1654,6 +1654,16 @@
             password: '115411'
         };
 
+        // Monta URL completa do WebDAV a partir de um caminho relativo ou absoluto.
+        // Vídeos antigos já têm URL completa — retornados como estão (retrocompatível).
+        function resolveWebdavUrl(path) {
+            if (!path) return null;
+            if (path.startsWith('http')) return path; // URL antiga — usa diretamente
+            const base = WEBDAV_CONFIG.url.replace(/\/$/, '');
+            const rel  = path.startsWith('/') ? path : '/' + path;
+            return base + rel;
+        }
+
         // ========== WEBDAV CLIENT ==========
         class WebDAVClient {
             constructor(url, username, password) {
@@ -1718,7 +1728,7 @@
                 });
                 
                 if (response.ok || response.status === 201 || response.status === 204) {
-                    return this.baseUrl + 'autopost/videos/' + fileName;
+                    return 'autopost/videos/' + fileName;  // só o caminho — URL montada na hora com WEBDAV_CONFIG.url
                 }
                 throw new Error('Upload falhou');
             }
@@ -2760,10 +2770,12 @@
                             titulo: video.titulo,
                             descricao: video.descricao || '',
                             tags: video.tags || '',
-                            agendamento: video.agendamento
+                            agendamento: video.agendamento,
+                            isShort: video.isShort || false,
+                            thumbnailUrl: resolveWebdavUrl(video.thumbnailUrl)  // também monta URL na hora
                         },
                         accessToken: conta.accessToken,
-                        webdavUrl: video.webdavUrl,
+                        webdavUrl: resolveWebdavUrl(video.webdavUrl),
                         webdavAuth: `${WEBDAV_CONFIG.username}:${WEBDAV_CONFIG.password}`
                     })
                 });
@@ -3778,7 +3790,7 @@
                             videosEncontradosNaPasta.push({
                                 arquivo: fileName,
                                 arquivoWebDAV: caminhoCompleto,
-                                webdavUrl: WEBDAV_CONFIG.url + caminhoCompleto,
+                                webdavUrl: caminhoCompleto,  // só o caminho — URL montada na hora com resolveWebdavUrl()
                                 tamanho: tamanhoEstimado,
                                 mimeType: 'video/mp4'
                             });

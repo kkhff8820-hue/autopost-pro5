@@ -1533,9 +1533,9 @@
                            style="width: 100%; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.95em;">
                     <p style="margin-top: 8px; font-size: 0.85em; color: var(--text-secondary);">
                         💡 <strong>Exemplos:</strong><br>
-                        • Vazio = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/videos/</code> (padrão)<br>
-                        • "lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/videos/lote1/</code><br>
-                        • "shorts/lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/videos/shorts/lote1/</code>
+                        • Vazio = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/</code> (padrão)<br>
+                        • "lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/lote1/</code><br>
+                        • "shorts/lote1" = escaneia <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">autopost/shorts/lote1/</code>
                     </p>
                 </div>
                 
@@ -1654,15 +1654,32 @@
             password: '115411'
         };
 
-        // Monta URL do vídeo usando SEMPRE o host atual + caminho fixo /autopost/videos/.
-        // Extrai só o nome do arquivo de qualquer formato: URL completa, caminho relativo ou só o nome.
-        // Assim funciona com vídeos antigos, novos, e após qualquer troca de túnel.
+        // Monta URL do vídeo usando SEMPRE o host atual do WebDAV.
+        // Suporta 3 formatos:
+        //   1. URL completa antiga (ex: https://old-tunnel.com/autopost/lote1/video.mp4) → troca só o host
+        //   2. Caminho relativo com subpasta (ex: autopost/lote1/video.mp4) → anexa ao host
+        //   3. Só o nome do arquivo (ex: video.mp4) → coloca em /autopost/
         function resolveWebdavUrl(path) {
             if (!path) return null;
-            // Pega só o nome do arquivo (tudo depois da última /)
-            const filename = path.split('/').pop();
             const base = WEBDAV_CONFIG.url.replace(/\/$/, '');
-            return base + '/autopost/videos/' + filename;
+
+            // Formato 1: URL completa — reutiliza o pathname (preserva subpastas, troca host)
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+                try {
+                    const u = new URL(path);
+                    return base + u.pathname;
+                } catch(e) {
+                    return base + '/autopost/' + path.split('/').pop();
+                }
+            }
+
+            // Formato 2: caminho relativo com pasta (ex: autopost/lote1/video.mp4)
+            if (path.includes('/')) {
+                return base + '/' + path.replace(/^\//, '');
+            }
+
+            // Formato 3: só o nome do arquivo
+            return base + '/autopost/' + path;
         }
 
         // ========== WEBDAV CLIENT ==========
@@ -1722,9 +1739,9 @@
 
             async uploadFile(fileName, content, contentType) {
                 await this.ensureDirectory('autopost/');
-                await this.ensureDirectory('autopost/videos/');
+                await this.ensureDirectory('autopost/');
                 
-                const response = await this.request('autopost/videos/' + fileName, 'PUT', content, {
+                const response = await this.request('autopost/' + fileName, 'PUT', content, {
                     'Content-Type': contentType
                 });
                 
@@ -2738,6 +2755,42 @@
             return contasDisponiveis[0];
         }
 
+        async function getValidAccessToken(conta) {
+            const agora = Date.now();
+            const expira = conta.expiresAt ? new Date(conta.expiresAt).getTime() : 0;
+
+            if (expira > agora + 60000) {
+                return conta.accessToken; // ainda válido
+            }
+
+            if (!conta.refreshToken) {
+                throw new Error(`Token expirado e sem refresh_token. Reautorize a conta "${conta.nome}".`);
+            }
+
+            console.log(`[TOKEN] Renovando token da conta: ${conta.nome}`);
+            const r = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    client_id: conta.clientId,
+                    client_secret: conta.clientSecret,
+                    refresh_token: conta.refreshToken,
+                    grant_type: 'refresh_token'
+                })
+            });
+
+            const data = await r.json();
+            if (!data.access_token) {
+                throw new Error(`Falha ao renovar token (${data.error || 'erro desconhecido'}). Reautorize "${conta.nome}".`);
+            }
+
+            conta.accessToken = data.access_token;
+            conta.expiresAt = new Date(agora + (data.expires_in * 1000)).toISOString();
+            await saveData();
+            await addLog('info', `🔑 Token renovado automaticamente: ${conta.nome}`);
+            return conta.accessToken;
+        }
+
         async function processVideo(video) {
             video.status = 'processando';
             await saveData();
@@ -2775,8 +2828,8 @@
                             isShort: video.isShort || false,
                             thumbnailUrl: resolveWebdavUrl(video.thumbnailUrl)
                         },
-                        accessToken: conta.accessToken,
-                        webdavUrl: resolveWebdavUrl(video.webdavUrl),
+                        accessToken: await getValidAccessToken(conta),
+                        webdavUrl: resolveWebdavUrl(video.arquivoWebDAV || video.webdavUrl),
                         webdavAuth: `${WEBDAV_CONFIG.username}:${WEBDAV_CONFIG.password}`
                     })
                 });
@@ -3685,10 +3738,10 @@
                 // Remove barras do início e fim
                 subpasta = subpasta.replace(/^\/+|\/+$/g, '');
                 // Adiciona prefixo da pasta de vídeos e barra no final
-                subpasta = 'autopost/videos/' + subpasta + '/';
+                subpasta = 'autopost/' + subpasta + '/';
             } else {
                 // Padrão: pasta onde os vídeos são salvos pelo sistema
-                subpasta = 'autopost/videos/';
+                subpasta = 'autopost/';
             }
             
             const caminhoExibicao = `"${subpasta}"`;

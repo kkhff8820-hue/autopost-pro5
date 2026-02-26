@@ -1907,7 +1907,8 @@
 
         // ========== LOGGING ==========
         function addLog(type, message, details = null) {
-            // Síncrono e sem WebDAV — salva apenas em memória e atualiza a UI
+            // Só memória + UI — sem I/O (localStorage ou WebDAV)
+            // Os dados são persistidos no próximo saveData()
             const log = {
                 id: Date.now(),
                 type: type,
@@ -1917,7 +1918,6 @@
             };
             allLogs.unshift(log);
             if (allLogs.length > 100) allLogs = allLogs.slice(0, 100);
-            saveToLocalStorage(); // só localStorage, sem WebDAV
             renderLogs();
             console.log(`[${type.toUpperCase()}]`, message, details || '');
         }
@@ -1942,7 +1942,7 @@
         async function clearLogs() {
             if (confirm('Limpar todos os logs?')) {
                 allLogs = [];
-                await saveData();
+                saveData();
                 renderLogs();
                 showAlert('success', 'Logs limpos!');
             }
@@ -2054,38 +2054,45 @@
             addLog('success', `Dados sincronizados (WebDAV): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
         }
 
-        async function saveData() {
-            // SEMPRE salva no localStorage — é a fonte primária de dados
+        // Flag: evita múltiplos syncs WebDAV simultâneos
+        let _webdavSyncPending = false;
+
+        function saveData() {
+            // PASSO 1: localStorage — síncrono, instantâneo, NUNCA falha
             saveToLocalStorage();
 
-            // WebDAV indisponível para escrita? localStorage já garantiu os dados — retorna ok
-            if (!webdavConnected || !webdavCanWrite) {
-                return true;
+            // PASSO 2: WebDAV em background (fire and forget) — não bloqueia a UI
+            if (webdavConnected && webdavCanWrite && !_webdavSyncPending) {
+                _webdavSyncPending = true;
+
+                // Captura snapshot dos dados AGORA para enviar ao WebDAV
+                const snapshot = {
+                    videos:    JSON.parse(JSON.stringify(allVideos)),
+                    logs:      JSON.parse(JSON.stringify(allLogs)),
+                    contas:    JSON.parse(JSON.stringify(allContas)),
+                    biblioteca:JSON.parse(JSON.stringify(biblioteca)),
+                    videosbank:JSON.parse(JSON.stringify(videosBank)),
+                };
+
+                Promise.allSettled([
+                    webdav.saveJSON('videos.json',     snapshot.videos),
+                    webdav.saveJSON('logs.json',        snapshot.logs),
+                    webdav.saveJSON('contas.json',      snapshot.contas),
+                    webdav.saveJSON('biblioteca.json',  snapshot.biblioteca),
+                    webdav.saveJSON('videosbank.json',  snapshot.videosbank),
+                ]).then(results => {
+                    _webdavSyncPending = false;
+                    const erros = results.filter(r => r.status === 'rejected');
+                    if (erros.length > 0) {
+                        console.warn('[SAVE] Erros WebDAV (dados seguros no localStorage):', erros.length);
+                    } else {
+                        document.getElementById('save-error-banner')?.remove();
+                        console.log('[SAVE] WebDAV sincronizado ✓');
+                    }
+                });
             }
 
-            const arquivos = [
-                { nome: 'videos.json',     dados: allVideos },
-                { nome: 'logs.json',       dados: allLogs },
-                { nome: 'contas.json',     dados: allContas },
-                { nome: 'biblioteca.json', dados: biblioteca },
-                { nome: 'videosbank.json', dados: videosBank },
-            ];
-
-            // Salva TODOS em paralelo — muito mais rápido que sequencial
-            const resultados = await Promise.allSettled(
-                arquivos.map(arq => webdav.saveJSON(arq.nome, arq.dados))
-            );
-
-            const erros = resultados
-                .map((r, i) => r.status === 'rejected' ? { arquivo: arquivos[i].nome, motivo: traduzirErro(r.reason) } : null)
-                .filter(Boolean);
-
-            if (erros.length > 0) {
-                console.warn('[SAVE] Erro ao salvar no WebDAV (dados preservados localmente):', erros);
-                return false;
-            }
-
-            document.getElementById('save-error-banner')?.remove();
+            // Retorna imediatamente — não espera WebDAV
             return true;
         }
 
@@ -2362,7 +2369,7 @@
                 }
             }
 
-            await saveData();
+            saveData();
             showLoading(false);
             
             if (postarEmTodas) {
@@ -2447,7 +2454,7 @@
             };
 
             allContas.push(conta);
-            await saveData();
+            saveData();
             addLog('success', `Conta adicionada: ${conta.nome}`);
             
             closeModal('modalAddConta');
@@ -2508,7 +2515,7 @@
                     conta.refreshToken = data.refresh_token;
                     conta.expiresAt = new Date(Date.now() + (data.expires_in * 1000)).toISOString();
                     
-                    await saveData();
+                    saveData();
                     await renderContas();
                     renderContasModal();
                     updateStatusIndicator(true);
@@ -2529,7 +2536,7 @@
             const conta = allContas.find(c => c.id === id);
             if (conta) {
                 conta.ativa = !conta.ativa;
-                await saveData();
+                saveData();
                 await renderContas();
                 renderContasModal();
                 showAlert('info', `Conta ${conta.ativa ? 'ativada' : 'pausada'}`);
@@ -2541,7 +2548,7 @@
             if (!confirm('Deletar esta conta?')) return;
             const conta = allContas.find(c => c.id === id);
             allContas = allContas.filter(c => c.id !== id);
-            await saveData();
+            saveData();
             await renderContas();
             renderContasModal();
             showAlert('success', `Conta ${conta.nome} deletada`);
@@ -2687,7 +2694,7 @@
         async function deletarVideo(id) {
             if (!confirm('Deletar?')) return;
             allVideos = allVideos.filter(v => v.id !== id);
-            await saveData();
+            saveData();
             addLog('info', `Vídeo deletado (ID: ${id})`);
             await renderVideos();
             showAlert('success', 'Deletado!');
@@ -2699,7 +2706,7 @@
                 video.status = 'pendente';
                 video.tentativas = 0;
                 video.errorMessage = null;
-                await saveData();
+                saveData();
                 addLog('info', `Reativado: ${video.titulo}`);
                 await renderVideos();
                 showAlert('success', 'Reativado!');
@@ -2758,7 +2765,7 @@
             if (!conta.clientSecret) {
                 conta.accessToken = null;
                 conta.refreshToken = null;
-                await saveData();
+                saveData();
                 throw new Error(`Conta "${conta.nome}" não tem Client Secret salvo. Recadastre a conta com o Client Secret correto.`);
             }
 
@@ -2787,7 +2794,7 @@
                 const motivo = data.error_description || data.error || 'erro desconhecido';
                 if (data.error === 'invalid_grant') {
                     conta.accessToken = null; conta.refreshToken = null; conta.expiresAt = null;
-                    await saveData();
+                    saveData();
                     throw new Error(`Sessão expirada na conta "${conta.nome}". Clique em Autorizar novamente.`);
                 }
                 if (r.status === 401) {
@@ -2798,14 +2805,14 @@
 
             conta.accessToken = data.access_token;
             conta.expiresAt = new Date(agora + (data.expires_in * 1000)).toISOString();
-            await saveData();
+            saveData();
             addLog('info', `🔑 Token renovado: ${conta.nome}`);
             return conta.accessToken;
         }
 
         async function processVideo(video) {
             video.status = 'processando';
-            await saveData();
+            saveData();
             await renderVideos();
 
             try {
@@ -2880,7 +2887,7 @@
                 }
             }
 
-            await saveData();
+            saveData();
             await renderVideos();
         }
 
@@ -3033,7 +3040,7 @@
             }
 
             addLog('success', `📦 ${selectedFilesBanco.length} vídeos adicionados ao banco`);
-            await saveData();
+            saveData();
             showLoading(false);
             showAlert('success', `${selectedFilesBanco.length} vídeo(s) adicionado(s) ao banco!`);
 
@@ -3141,7 +3148,7 @@
                 selectedBancoVideos.delete(video.id);
             }
 
-            await saveData();
+            saveData();
             showLoading(false);
             showAlert('success', `🎉 ${totalAgendamentos} uploads agendados! (${videosParaPostar.length} vídeos × ${contasAtivas.length} contas × 2 horários)`);
             
@@ -3513,7 +3520,7 @@
             }
             
             addLog('success', `📚 ${massaFiles.length} vídeos adicionados à biblioteca`);
-            await saveData();
+            saveData();
             renderBiblioteca();
             closeModal('modalUploadMassa');
             
@@ -3650,8 +3657,7 @@
             const postarTodas = document.getElementById('postarTodasLote').checked;
             const videosParaAgendar = biblioteca.filter(v => selectedBiblioteca.includes(v.id));
             
-            showLoading(true, 'Criando agendamentos...');
-            
+            // Operação puramente em memória — sem I/O no loop
             let videoIndex = 0;
             const diasNecessarios = Math.ceil(videosParaAgendar.length / freq);
             const contasAtivas = postarTodas ? allContas.filter(c => c.ativa && c.accessToken) : [];
@@ -3664,15 +3670,12 @@
                     const horario = horariosLote[post % horariosLote.length];
                     
                     if (postarTodas && contasAtivas.length > 0) {
-                        // Posta em todas as contas
                         for (let contaIndex = 0; contaIndex < contasAtivas.length; contaIndex++) {
                             const conta = contasAtivas[contaIndex];
-                            const intervalo = contaIndex * 5;
                             const dataHora = new Date(data);
                             const [h, m] = horario.split(':');
-                            dataHora.setHours(parseInt(h), parseInt(m) + intervalo);
-                            
-                            const video = {
+                            dataHora.setHours(parseInt(h), parseInt(m) + contaIndex * 5);
+                            allVideos.push({
                                 ...videoBase,
                                 id: Date.now() + videoIndex + contaIndex * 1000,
                                 contaIdPreferida: conta.id,
@@ -3680,18 +3683,13 @@
                                 status: 'pendente',
                                 tentativas: 0,
                                 criadoEm: new Date().toISOString()
-                            };
-                            
-                            allVideos.push(video);
-                            addLog('success', `📤 ${video.titulo} → ${conta.nome} (${dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
+                            });
                         }
                     } else {
-                        // Modo normal
                         const dataHora = new Date(data);
                         const [h, m] = horario.split(':');
                         dataHora.setHours(parseInt(h), parseInt(m));
-                        
-                        const video = {
+                        allVideos.push({
                             ...videoBase,
                             id: Date.now() + videoIndex,
                             contaIdPreferida: null,
@@ -3699,10 +3697,7 @@
                             status: 'pendente',
                             tentativas: 0,
                             criadoEm: new Date().toISOString()
-                        };
-                        
-                        allVideos.push(video);
-                        addLog('success', `📅 Agendado: ${video.titulo} para ${dataHora.toLocaleString('pt-BR')}`);
+                        });
                     }
                     
                     videoIndex++;
@@ -3713,21 +3708,23 @@
             biblioteca = biblioteca.filter(v => !selectedBiblioteca.includes(v.id));
             selectedBiblioteca = [];
             
-            await saveData();
+            // localStorage: instantâneo | WebDAV: background sem bloquear
+            saveData();
+            
+            const total = videoIndex * (postarTodas ? contasAtivas.length : 1);
+            addLog('success', `🚀 ${total} agendamento(s) criado(s)`);
+            
             closeModal('modalAgendarLote');
-            showLoading(false);
-            // Render assíncrono para não bloquear o feedback ao usuário
+            showAlert('success', `${total} agendamento(s) criado(s) com sucesso!`);
+            btn.disabled = false;
+            btn.textContent = '✅ Confirmar Agendamento';
+            
+            // Render em background
             setTimeout(() => {
                 renderBiblioteca();
                 renderVideos();
                 updateSelectedCountBiblioteca();
-            }, 50);
-            
-            const total = videoIndex * (postarTodas ? contasAtivas.length : 1);
-            showAlert('success', `${total} agendamento(s) criado(s) com sucesso!`);
-            
-            btn.disabled = false;
-            btn.textContent = '✅ Confirmar Agendamento';
+            }, 0);
         }
 
 
@@ -3996,7 +3993,7 @@
             }
             
             addLog('success', `📁 ${videosEncontradosNaPasta.length} vídeos adicionados à biblioteca`);
-            await saveData();
+            saveData();
             renderBiblioteca();
             
             showLoading(false);

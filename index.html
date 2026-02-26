@@ -1662,12 +1662,24 @@
         function resolveWebdavUrl(path) {
             if (!path) return null;
             const base = WEBDAV_CONFIG.url.replace(/\/$/, '');
-            if (path.startsWith('http://') || path.startsWith('https://')) {
-                try { return base + new URL(path).pathname; }
-                catch(e) { return base + '/autopost/' + path.split('/').pop(); }
+            
+            function encodePath(p) {
+                return p.split('/').map(s => {
+                    try { return encodeURIComponent(decodeURIComponent(s)); }
+                    catch(e) { return encodeURIComponent(s); }
+                }).join('/');
             }
-            if (path.includes('/')) return base + '/' + path.replace(/^\//, '');
-            return base + '/autopost/' + path;
+            
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+                try {
+                    const parsed = new URL(path);
+                    return base + '/' + encodePath(parsed.pathname.replace(/^\//, ''));
+                } catch(e) {
+                    return base + '/autopost/' + encodeURIComponent(path.split('/').pop());
+                }
+            }
+            if (path.includes('/')) return base + '/' + encodePath(path.replace(/^\//, ''));
+            return base + '/autopost/' + encodeURIComponent(path);
         }
 
         // ========== WEBDAV CLIENT ==========
@@ -2788,7 +2800,7 @@
             });
 
             const data = await r.json();
-            console.error('[TOKEN] Resposta Google:', JSON.stringify(data));
+            console.log('[TOKEN] Resposta Google:', JSON.stringify(data));
 
             if (!data.access_token) {
                 const motivo = data.error_description || data.error || 'erro desconhecido';
@@ -2796,6 +2808,13 @@
                     conta.accessToken = null; conta.refreshToken = null; conta.expiresAt = null;
                     saveData();
                     throw new Error(`Sessão expirada na conta "${conta.nome}". Clique em Autorizar novamente.`);
+                }
+                if (data.error === 'disabled_client') {
+                    conta.ativa = false;
+                    conta.accessToken = null;
+                    conta.errorMessage = 'OAuth Client desativado no Google Cloud Console';
+                    saveData();
+                    throw new Error(`ERRO_PERMANENTE: OAuth Client desativado na conta "${conta.nome}". Recrie o Client ID no Google Cloud Console.`);
                 }
                 if (r.status === 401) {
                     throw new Error(`Client Secret inválido na conta "${conta.nome}". Verifique no Google Cloud Console e recadastre.`);
@@ -2876,14 +2895,18 @@
             } catch (error) {
                 video.tentativas = (video.tentativas || 0) + 1;
 
-                if (video.tentativas >= 3) {
+                // Erros permanentes não precisam de retry
+                const erroPermanente = error.message.startsWith('ERRO_PERMANENTE:');
+                const mensagem = error.message.replace('ERRO_PERMANENTE: ', '');
+
+                if (erroPermanente || video.tentativas >= 3) {
                     video.status = 'falha';
-                    video.errorMessage = error.message;
-                    addLog('error', `❌ Falha após 3 tentativas: ${video.titulo}`, error.message);
-                    showAlert('error', `Falha: ${video.titulo} - ${error.message}`);
+                    video.errorMessage = mensagem;
+                    addLog('error', `❌ Falha${erroPermanente ? ' permanente' : ' após 3 tentativas'}: ${video.titulo}`, mensagem);
+                    showAlert('error', `Falha: ${video.titulo} - ${mensagem}`);
                 } else {
                     video.status = 'pendente';
-                    addLog('warning', `⚠️ Tentativa ${video.tentativas}/3 falhou: ${error.message}`);
+                    addLog('warning', `⚠️ Tentativa ${video.tentativas}/3 falhou: ${mensagem}`);
                 }
             }
 
@@ -3656,6 +3679,20 @@
             const dataInicio = new Date(document.getElementById('dataInicioLote').value);
             const postarTodas = document.getElementById('postarTodasLote').checked;
             const videosParaAgendar = biblioteca.filter(v => selectedBiblioteca.includes(v.id));
+
+            if (videosParaAgendar.length === 0) {
+                showAlert('error', 'Selecione pelo menos um vídeo para agendar.');
+                btn.disabled = false;
+                btn.textContent = '✅ Confirmar Agendamento';
+                return;
+            }
+
+            if (horariosLote.length === 0) {
+                showAlert('error', 'Adicione pelo menos um horário antes de agendar.');
+                btn.disabled = false;
+                btn.textContent = '✅ Confirmar Agendamento';
+                return;
+            }
             
             // Operação puramente em memória — sem I/O no loop
             let videoIndex = 0;

@@ -2071,18 +2071,16 @@
                 { nome: 'videosbank.json', dados: videosBank },
             ];
 
-            const erros = [];
-            for (const arq of arquivos) {
-                try {
-                    await webdav.saveJSON(arq.nome, arq.dados);
-                } catch (e) {
-                    erros.push({ arquivo: arq.nome, motivo: traduzirErro(e) });
-                    console.warn(`[SAVE] Erro WebDAV em ${arq.nome}:`, e.message);
-                }
-            }
+            // Salva TODOS em paralelo — muito mais rápido que sequencial
+            const resultados = await Promise.allSettled(
+                arquivos.map(arq => webdav.saveJSON(arq.nome, arq.dados))
+            );
+
+            const erros = resultados
+                .map((r, i) => r.status === 'rejected' ? { arquivo: arquivos[i].nome, motivo: traduzirErro(r.reason) } : null)
+                .filter(Boolean);
 
             if (erros.length > 0) {
-                // WebDAV falhou mas localStorage já salvou — não trava o usuário
                 console.warn('[SAVE] Erro ao salvar no WebDAV (dados preservados localmente):', erros);
                 return false;
             }
@@ -2636,7 +2634,12 @@
             container.style.display = 'grid';
             empty.style.display = 'none';
 
-            container.innerHTML = videos.map(video => {
+            // Renderiza no máximo 50 cards — mais que isso trava o browser
+            const MAX_RENDER = 50;
+            const videosParaRender = videos.slice(0, MAX_RENDER);
+            const resto = videos.length - MAX_RENDER;
+
+            container.innerHTML = videosParaRender.map(video => {
                 const agendamento = new Date(video.agendamento);
                 const statusBadges = {
                     pendente: '⏳ Pendente',
@@ -2674,7 +2677,11 @@
                         </div>
                     </div>
                 `;
-            }).join('');
+            }).join('') + (resto > 0 ? `
+                <div style="grid-column:1/-1;padding:20px;text-align:center;background:rgba(0,217,255,0.1);border-radius:12px;border:1px solid var(--accent-secondary);">
+                    <strong style="color:var(--accent-secondary);">+ ${resto} vídeo(s) não exibidos</strong>
+                    <p style="margin-top:8px;font-size:0.85em;color:var(--text-secondary);">Use os Logs ou filtre por status para ver todos</p>
+                </div>` : '');
         }
 
         async function deletarVideo(id) {
@@ -3707,12 +3714,14 @@
             selectedBiblioteca = [];
             
             await saveData();
-            renderBiblioteca();
-            renderVideos();
-            updateSelectedCountBiblioteca();
-            
             closeModal('modalAgendarLote');
             showLoading(false);
+            // Render assíncrono para não bloquear o feedback ao usuário
+            setTimeout(() => {
+                renderBiblioteca();
+                renderVideos();
+                updateSelectedCountBiblioteca();
+            }, 50);
             
             const total = videoIndex * (postarTodas ? contasAtivas.length : 1);
             showAlert('success', `${total} agendamento(s) criado(s) com sucesso!`);

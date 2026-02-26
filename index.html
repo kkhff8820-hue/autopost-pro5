@@ -1662,23 +1662,11 @@
         function resolveWebdavUrl(path) {
             if (!path) return null;
             const base = WEBDAV_CONFIG.url.replace(/\/$/, '');
-
-            // Formato 1: URL completa — reutiliza o pathname (preserva subpastas, troca host)
             if (path.startsWith('http://') || path.startsWith('https://')) {
-                try {
-                    const u = new URL(path);
-                    return base + u.pathname;
-                } catch(e) {
-                    return base + '/autopost/' + path.split('/').pop();
-                }
+                try { return base + new URL(path).pathname; }
+                catch(e) { return base + '/autopost/' + path.split('/').pop(); }
             }
-
-            // Formato 2: caminho relativo com pasta (ex: autopost/lote1/video.mp4)
-            if (path.includes('/')) {
-                return base + '/' + path.replace(/^\//, '');
-            }
-
-            // Formato 3: só o nome do arquivo
+            if (path.includes('/')) return base + '/' + path.replace(/^\//, '');
             return base + '/autopost/' + path;
         }
 
@@ -1738,7 +1726,6 @@
             }
 
             async uploadFile(fileName, content, contentType) {
-                await this.ensureDirectory('autopost/');
                 await this.ensureDirectory('autopost/');
                 
                 const response = await this.request('autopost/' + fileName, 'PUT', content, {
@@ -1919,7 +1906,8 @@
         }
 
         // ========== LOGGING ==========
-        async function addLog(type, message, details = null) {
+        function addLog(type, message, details = null) {
+            // Síncrono e sem WebDAV — salva apenas em memória e atualiza a UI
             const log = {
                 id: Date.now(),
                 type: type,
@@ -1929,7 +1917,7 @@
             };
             allLogs.unshift(log);
             if (allLogs.length > 100) allLogs = allLogs.slice(0, 100);
-            await saveData();
+            saveToLocalStorage(); // só localStorage, sem WebDAV
             renderLogs();
             console.log(`[${type.toUpperCase()}]`, message, details || '');
         }
@@ -2022,7 +2010,7 @@
             // Se só lê (405), não adianta nada — localStorage já é suficiente
             if (!webdavCanWrite) {
                 console.log('[LOAD] WebDAV readonly ou offline — usando apenas localStorage');
-                await addLog('success', `Dados carregados (local): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
+                addLog('success', `Dados carregados (local): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
                 return;
             }
 
@@ -2063,7 +2051,7 @@
             // Garante localStorage atualizado
             saveToLocalStorage();
 
-            await addLog('success', `Dados sincronizados (WebDAV): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
+            addLog('success', `Dados sincronizados (WebDAV): ${allVideos.length} vídeos, ${allContas.length} contas, ${biblioteca.length} biblioteca`);
         }
 
         async function saveData() {
@@ -2284,9 +2272,9 @@
                 try {
                     const thumbFileName = `thumb_${Date.now()}_${selectedThumbnail.name}`;
                     thumbnailUrl = await webdav.uploadFile(thumbFileName, selectedThumbnail, selectedThumbnail.type);
-                    await addLog('success', `🖼️ Thumbnail enviada: ${selectedThumbnail.name}`);
+                    addLog('success', `🖼️ Thumbnail enviada: ${selectedThumbnail.name}`);
                 } catch (error) {
-                    await addLog('warning', `Thumbnail falhou, continuando sem ela: ${error.message}`);
+                    addLog('warning', `Thumbnail falhou, continuando sem ela: ${error.message}`);
                 }
             }
 
@@ -2343,7 +2331,7 @@
                             };
 
                             allVideos.push(video);
-                            await addLog('success', `📤 ${video.titulo} → ${conta.nome} (${dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
+                            addLog('success', `📤 ${video.titulo} → ${conta.nome} (${dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
                         }
                     } else {
                         // Modo normal (uma conta só)
@@ -2367,12 +2355,12 @@
                         };
 
                         allVideos.push(video);
-                        await addLog('success', `Upload: ${video.titulo} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
+                        addLog('success', `Upload: ${video.titulo} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
                     }
                 } catch (error) {
                     progressBar.style.width = '100%';
                     progressBar.style.background = 'var(--accent-danger)';
-                    await addLog('error', `Erro: ${file.name}`, error.message);
+                    addLog('error', `Erro: ${file.name}`, error.message);
                 }
             }
 
@@ -2462,7 +2450,7 @@
 
             allContas.push(conta);
             await saveData();
-            await addLog('success', `Conta adicionada: ${conta.nome}`);
+            addLog('success', `Conta adicionada: ${conta.nome}`);
             
             closeModal('modalAddConta');
             await renderContas();
@@ -2528,14 +2516,14 @@
                     updateStatusIndicator(true);
                     
                     showAlert('success', `Conta ${conta.nome} autorizada!`);
-                    await addLog('success', `Conta autorizada: ${conta.nome}`);
+                    addLog('success', `Conta autorizada: ${conta.nome}`);
                 } else {
                     throw new Error('Falha ao obter token');
                 }
             } catch (e) {
                 console.error('Erro:', e);
                 showAlert('error', 'Erro ao autorizar: ' + e.message);
-                await addLog('error', 'Erro ao autorizar', e.message);
+                addLog('error', 'Erro ao autorizar', e.message);
             }
         }
 
@@ -2547,7 +2535,7 @@
                 await renderContas();
                 renderContasModal();
                 showAlert('info', `Conta ${conta.ativa ? 'ativada' : 'pausada'}`);
-                await addLog('info', `Conta ${conta.nome} ${conta.ativa ? 'ativada' : 'pausada'}`);
+                addLog('info', `Conta ${conta.nome} ${conta.ativa ? 'ativada' : 'pausada'}`);
             }
         }
 
@@ -2559,7 +2547,7 @@
             await renderContas();
             renderContasModal();
             showAlert('success', `Conta ${conta.nome} deletada`);
-            await addLog('info', `Conta deletada: ${conta.nome}`);
+            addLog('info', `Conta deletada: ${conta.nome}`);
         }
 
         async function renderContas() {
@@ -2693,7 +2681,7 @@
             if (!confirm('Deletar?')) return;
             allVideos = allVideos.filter(v => v.id !== id);
             await saveData();
-            await addLog('info', `Vídeo deletado (ID: ${id})`);
+            addLog('info', `Vídeo deletado (ID: ${id})`);
             await renderVideos();
             showAlert('success', 'Deletado!');
         }
@@ -2705,7 +2693,7 @@
                 video.tentativas = 0;
                 video.errorMessage = null;
                 await saveData();
-                await addLog('info', `Reativado: ${video.titulo}`);
+                addLog('info', `Reativado: ${video.titulo}`);
                 await renderVideos();
                 showAlert('success', 'Reativado!');
             }
@@ -2713,7 +2701,7 @@
 
         // ========== WORKER ==========
         async function startWorker() {
-            await addLog('info', 'Worker iniciado - Sistema de múltiplas contas ativo');
+            addLog('info', 'Worker iniciado - Sistema de múltiplas contas ativo');
             workerInterval = setInterval(async () => {
                 await checkScheduledVideos();
             }, 60000);
@@ -2759,15 +2747,21 @@
             const agora = Date.now();
             const expira = conta.expiresAt ? new Date(conta.expiresAt).getTime() : 0;
 
-            if (expira > agora + 60000) {
-                return conta.accessToken; // ainda válido
+            // Verifica se tem clientSecret salvo — contas antigas podem não ter
+            if (!conta.clientSecret) {
+                conta.accessToken = null;
+                conta.refreshToken = null;
+                await saveData();
+                throw new Error(`Conta "${conta.nome}" não tem Client Secret salvo. Recadastre a conta com o Client Secret correto.`);
             }
+
+            if (expira > agora + 60000) return conta.accessToken; // ainda válido
 
             if (!conta.refreshToken) {
-                throw new Error(`Token expirado e sem refresh_token. Reautorize a conta "${conta.nome}".`);
+                throw new Error(`Token expirado. Reautorize a conta "${conta.nome}".`);
             }
 
-            console.log(`[TOKEN] Renovando token da conta: ${conta.nome}`);
+            console.log(`[TOKEN] Renovando: ${conta.nome}`);
             const r = await fetch('https://oauth2.googleapis.com/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -2780,14 +2774,25 @@
             });
 
             const data = await r.json();
+            console.error('[TOKEN] Resposta Google:', JSON.stringify(data));
+
             if (!data.access_token) {
-                throw new Error(`Falha ao renovar token (${data.error || 'erro desconhecido'}). Reautorize "${conta.nome}".`);
+                const motivo = data.error_description || data.error || 'erro desconhecido';
+                if (data.error === 'invalid_grant') {
+                    conta.accessToken = null; conta.refreshToken = null; conta.expiresAt = null;
+                    await saveData();
+                    throw new Error(`Sessão expirada na conta "${conta.nome}". Clique em Autorizar novamente.`);
+                }
+                if (r.status === 401) {
+                    throw new Error(`Client Secret inválido na conta "${conta.nome}". Verifique no Google Cloud Console e recadastre.`);
+                }
+                throw new Error(`Falha ao renovar token (${motivo}). Reautorize "${conta.nome}".`);
             }
 
             conta.accessToken = data.access_token;
             conta.expiresAt = new Date(agora + (data.expires_in * 1000)).toISOString();
             await saveData();
-            await addLog('info', `🔑 Token renovado automaticamente: ${conta.nome}`);
+            addLog('info', `🔑 Token renovado: ${conta.nome}`);
             return conta.accessToken;
         }
 
@@ -2809,7 +2814,7 @@
                     throw new Error(`Conta ${conta.nome} não está autorizada`);
                 }
 
-                await addLog('info', `Processando: ${video.titulo} → Conta: ${conta.nome}`);
+                addLog('info', `Processando: ${video.titulo} → Conta: ${conta.nome}`);
 
                 // UPLOAD REAL PARA YOUTUBE!
                 const API_URL = window.location.origin + '/api/upload-video';
@@ -2851,7 +2856,7 @@
                 conta.ultimoUpload = new Date().toISOString();
                 
                 workerStats.processedToday++;
-                await addLog('success', `✅ Vídeo PUBLICADO NO YOUTUBE: ${video.titulo} (${conta.nome}) - ID: ${result.youtubeId}`);
+                addLog('success', `✅ Vídeo PUBLICADO NO YOUTUBE: ${video.titulo} (${conta.nome}) - ID: ${result.youtubeId}`);
                 showAlert('success', `🎉 ${video.titulo} publicado no YouTube! Canal: ${conta.nome}`);
 
             } catch (error) {
@@ -2860,11 +2865,11 @@
                 if (video.tentativas >= 3) {
                     video.status = 'falha';
                     video.errorMessage = error.message;
-                    await addLog('error', `❌ Falha após 3 tentativas: ${video.titulo}`, error.message);
+                    addLog('error', `❌ Falha após 3 tentativas: ${video.titulo}`, error.message);
                     showAlert('error', `Falha: ${video.titulo} - ${error.message}`);
                 } else {
                     video.status = 'pendente';
-                    await addLog('warning', `⚠️ Tentativa ${video.tentativas}/3 falhou: ${error.message}`);
+                    addLog('warning', `⚠️ Tentativa ${video.tentativas}/3 falhou: ${error.message}`);
                 }
             }
 
@@ -2987,9 +2992,9 @@
                 try {
                     const thumbFileName = `thumb_${Date.now()}_${selectedThumbnailBanco.name}`;
                     thumbnailUrl = await webdav.uploadFile(thumbFileName, selectedThumbnailBanco, selectedThumbnailBanco.type);
-                    await addLog('success', `🖼️ Thumbnail enviada: ${selectedThumbnailBanco.name}`);
+                    addLog('success', `🖼️ Thumbnail enviada: ${selectedThumbnailBanco.name}`);
                 } catch (error) {
-                    await addLog('warning', `Thumbnail falhou: ${error.message}`);
+                    addLog('warning', `Thumbnail falhou: ${error.message}`);
                 }
             }
 
@@ -3015,12 +3020,12 @@
                     };
 
                     videosBank.push(video);
-                    await addLog('success', `📦 Adicionado ao banco: ${video.titulo}`);
                 } catch (error) {
-                    await addLog('error', `Erro: ${file.name}`, error.message);
+                    addLog('error', `Erro: ${file.name}`, error.message);
                 }
             }
 
+            addLog('success', `📦 ${selectedFilesBanco.length} vídeos adicionados ao banco`);
             await saveData();
             showLoading(false);
             showAlert('success', `${selectedFilesBanco.length} vídeo(s) adicionado(s) ao banco!`);
@@ -3211,7 +3216,7 @@
                     await startWorker();
 
                     showAlert('success', '✅ Sistema online!');
-                    await addLog('success', 'Sistema iniciado - Múltiplas contas');
+                    addLog('success', 'Sistema iniciado - Múltiplas contas');
                 } else {
                     throw new Error('Falha ao conectar');
                 }
@@ -3226,10 +3231,10 @@
                     await renderContas();
                     renderLogs();
                     showAlert('warning', '⚠️ WebDAV offline — usando dados locais. Reconecte para sincronizar.');
-                    await addLog('warning', 'WebDAV offline, usando backup local: ' + e.message);
+                    addLog('warning', 'WebDAV offline, usando backup local: ' + e.message);
                 } else {
                     showAlert('error', 'Sem conexão e sem dados locais: ' + e.message);
-                    await addLog('error', 'Erro na conexão', e.message);
+                    addLog('error', 'Erro na conexão', e.message);
                 }
             }
 
@@ -3495,12 +3500,12 @@
                     };
                     
                     biblioteca.push(video);
-                    await addLog('success', `📚 Adicionado à biblioteca: ${video.titulo}`);
                 } catch (error) {
-                    await addLog('error', `Erro ao adicionar ${file.name}`, error.message);
+                    addLog('error', `Erro ao adicionar ${file.name}`, error.message);
                 }
             }
             
+            addLog('success', `📚 ${massaFiles.length} vídeos adicionados à biblioteca`);
             await saveData();
             renderBiblioteca();
             closeModal('modalUploadMassa');
@@ -3671,7 +3676,7 @@
                             };
                             
                             allVideos.push(video);
-                            await addLog('success', `📤 ${video.titulo} → ${conta.nome} (${dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
+                            addLog('success', `📤 ${video.titulo} → ${conta.nome} (${dataHora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
                         }
                     } else {
                         // Modo normal
@@ -3690,7 +3695,7 @@
                         };
                         
                         allVideos.push(video);
-                        await addLog('success', `📅 Agendado: ${video.titulo} para ${dataHora.toLocaleString('pt-BR')}`);
+                        addLog('success', `📅 Agendado: ${video.titulo} para ${dataHora.toLocaleString('pt-BR')}`);
                     }
                     
                     videoIndex++;
@@ -3979,9 +3984,9 @@
                 };
                 
                 biblioteca.push(video);
-                await addLog('success', `📁 Detectado e adicionado: ${video.titulo}`);
             }
             
+            addLog('success', `📁 ${videosEncontradosNaPasta.length} vídeos adicionados à biblioteca`);
             await saveData();
             renderBiblioteca();
             
